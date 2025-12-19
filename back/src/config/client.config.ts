@@ -12,14 +12,6 @@ export default registerAs('client', () => {
         'any.only': 'CLIENT_MODE must be either "dev" or "prod"'
       }),
     
-    jwt: Joi.string()
-      .min(1)
-      .required()
-      .messages({
-        'any.required': 'CLIENT_JWT is required',
-        'string.empty': 'CLIENT_JWT cannot be empty'
-      }),
-    
     corsOrigins: Joi.alternatives()
       .try(
         Joi.string().valid('*'),
@@ -29,14 +21,10 @@ export default registerAs('client', () => {
   });
 
   const mode = process.env.CLIENT_MODE;
-  const jwt = process.env.CLIENT_JWT;
   const rawCorsOrigins = process.env.CLIENT_CORS_ORIGINS || '';
 
   if (!mode) {
     throw new Error('CLIENT_MODE environment variable is required. Set to "dev" or "prod"');
-  }
-  if (!jwt) {
-    throw new Error('CLIENT_JWT environment variable is required');
   }
 
   let corsOrigins: string | string[];
@@ -68,7 +56,6 @@ export default registerAs('client', () => {
 
   const values = {
     mode,
-    jwt,
     corsOrigins,
   };
 
@@ -87,7 +74,6 @@ export default registerAs('client', () => {
 
   return {
     mode: value.mode,
-    jwt: value.jwt,
     corsOrigins: value.corsOrigins,
   };
 });
