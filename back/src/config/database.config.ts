@@ -32,6 +32,7 @@ export default registerAs('database', () => {
   if (error) {
     throw new Error(`Database config validation error: ${error.message}`);
   }
+  console.log('Database configuration loaded successfully.');
 
   return {
     host: value.host,
