@@ -6,6 +6,7 @@ import {
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
 import { MicrosoftGraphClientService } from 'src/client/microsoft_graph/microsoft_graph.service';
+import { ref } from 'process';
 
 interface CachedTokenData {
     access_token: string;
@@ -57,6 +58,7 @@ export class AuthService {
         token_type: tokenResponse.token_type,
         expires_in: tokenResponse.expires_in,
         scope: tokenResponse.scope,
+        refresh_token: tokenResponse.refresh_token,
         cached: true,
         };
     }
@@ -80,7 +82,7 @@ export class AuthService {
     }
     
 
-     /**
+    /**
     * Validates if the access token exists in cache
     * @param accessToken - The access token to validate (string)
     * @returns The cached token data if valid
