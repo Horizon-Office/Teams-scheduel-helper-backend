@@ -8,6 +8,9 @@ import { Cache } from 'cache-manager';
 import { GraphUserResponse, MicrosoftGraphClientService } from 'src/client/microsoft_graph/microsoft_graph.service';
 import { ref } from 'process';
 
+type Role = 'admin' | 'dispatcher';
+const VALID_ROLES: Role[] = ['admin', 'dispatcher'];
+
 export interface CachedTokenData {
   access_token: string;
   refresh_token: string;
@@ -18,6 +21,7 @@ export interface CachedTokenData {
   id_token: string;
   user: GraphUserResponse;
   cached_at: number;
+  jobTitle: string;
 }
 
 
@@ -37,32 +41,43 @@ export class AuthService {
      * @returns Successful response containing the token
      */
     async getIdentifiedDelegateToken(authCode: string, scope: string, redirect_uri: string) {
-    
-    const tokenResponse = await this.microsoftGraphClient.getDelegateToken(authCode, scope, redirect_uri);
 
+    const tokenResponse = await this.microsoftGraphClient.getDelegateToken(authCode, scope, redirect_uri);
     const userInfo = await this.microsoftGraphClient.getUserInfo(tokenResponse.access_token);
 
-    const cacheData = {
-        access_token: tokenResponse.access_token,
-        refresh_token: tokenResponse.refresh_token,
-        scope: tokenResponse.scope,
-        expires_in: tokenResponse.expires_in,
-        ext_expires_in: tokenResponse.expires_in * 2,
-        token_type: tokenResponse.token_type,
-        id_token: tokenResponse.id_token,
-        user: userInfo,
-        cached_at: Date.now(),
-    };
+    try {
+        const role = userInfo.jobTitle as Role;
 
-    const cacheKey = `auth:token:${tokenResponse.access_token}`;
-    const ttl = tokenResponse.expires_in * 1000;
-    await this.cacheManager.set(cacheKey, cacheData, ttl);
+        if (!VALID_ROLES.includes(role)) {
+            throw new Error(`Invalid role: ${role}`);
+        }
+            
+        const cacheData = {
+            access_token: tokenResponse.access_token,
+            refresh_token: tokenResponse.refresh_token,
+            scope: tokenResponse.scope,
+            expires_in: tokenResponse.expires_in,
+            ext_expires_in: tokenResponse.expires_in * 2,
+            token_type: tokenResponse.token_type,
+            id_token: tokenResponse.id_token,
+            user: userInfo,
+            jobTitle: userInfo.jobTitle,
+            cached_at: Date.now(),
+        };
 
-    return {
-        ...tokenResponse,
-        cached: true,
-        user: userInfo,
-    };
+        const cacheKey = `auth:token:${tokenResponse.access_token}`;
+        const ttl = tokenResponse.expires_in * 1000;
+        await this.cacheManager.set(cacheKey, cacheData, ttl);
+
+        return {
+            ...tokenResponse,
+            cached: true,
+            user: userInfo,
+        };
+    } catch (error) {
+        console.error("Authtorization failed by ivalide role:", error);
+        throw error; 
+    }
     }
 
     /**
@@ -75,21 +90,34 @@ export class AuthService {
         if (!accessToken || accessToken.trim() === '') {
             throw new UnauthorizedException('Access token is required');
         }
+
         const cacheKey = `auth:token:${accessToken}`;
         const cachedData: CachedTokenData | null | undefined = await this.cacheManager.get(cacheKey);
+
         if (!cachedData) {
             throw new UnauthorizedException('Invalid or expired token');
         }
+
+        // 1. Проверка срока действия
         const now = Date.now();
-        const cachedAt = cachedData.cached_at;
-        const expiresIn = cachedData.expires_in * 1000; 
-        if (now - cachedAt > expiresIn) {
+        const expiresAt = cachedData.cached_at + (cachedData.expires_in * 1000);
+
+        if (now > expiresAt) {
             await this.cacheManager.del(cacheKey);
             throw new UnauthorizedException('Token has expired');
         }
+
+        // 2. Проверка роли напрямую из поля jobTitle в кеше
+        const role = cachedData.jobTitle as Role;
+
+        if (!role || !VALID_ROLES.includes(role)) {
+            // Если роли нет или она не входит в список разрешенных
+            await this.cacheManager.del(cacheKey);
+            throw new UnauthorizedException(`Access denied: Invalid or missing role "${role}"`);
+        }
+
         return cachedData;
     }
-
 
 
     /**

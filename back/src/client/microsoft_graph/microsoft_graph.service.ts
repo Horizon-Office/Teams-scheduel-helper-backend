@@ -17,6 +17,7 @@ export interface GraphUserResponse {
   displayName: string;
   mail: string;
   userPrincipalName: string;
+  jobTitle: string,
   id: string;
 }
 
