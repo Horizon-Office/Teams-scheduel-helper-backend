@@ -4,7 +4,8 @@ import {
   Post, 
   HttpCode, 
   HttpStatus,
-  BadRequestException
+  BadRequestException,
+  Redirect
 } from '@nestjs/common';
 import { 
   ApiTags, 
@@ -12,22 +13,24 @@ import {
   ApiResponse, 
   ApiBody 
 } from '@nestjs/swagger';
-import { DeviceCodeAuthDto } from './dto/deviceCodeAuth.dto/deviceCodeAuth.dto';
+import { AuthCodeDto} from './dto/authToken.dto/authCode.dto';
 import { AuthService } from './auth.service';
+import { ValidateTokenDto } from './dto/validateToken.dto/validateToken.dto';
 
 @ApiTags('Authentication') 
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
-  @Post('devicecode')
+  @Post('delegateToken')
   @HttpCode(HttpStatus.OK)
-  async delegateTokenAuth(@Body() authDto: DeviceCodeAuthDto) {
+  async delegateTokenAuth(@Body() authDto: AuthCodeDto) {
     try {
-      const result = await this.authService.checkDeviceCode(
-        authDto.device_code, 
-        authDto.grant_type
-      );
+      const result = await this.authService.getIdentifiedDelegateToken(
+        authDto.authCode,
+        authDto.scope,
+        authDto.redirectUri
+      );  
       
       return {
         success: true,
@@ -43,9 +46,9 @@ export class AuthController {
   }
 
   @Post('validateToken')
-  async validateToken(@Body('access_token') access_token: string) {
+  async validateToken(@Body() validateDto: ValidateTokenDto) {
     try {
-      const tokenData = await this.authService.validateAccessToken(access_token);
+      await this.authService.validateAccessToken(validateDto.access_token);
       return {
         validate: true
       };

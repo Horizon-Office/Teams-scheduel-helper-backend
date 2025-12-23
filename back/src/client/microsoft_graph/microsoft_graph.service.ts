@@ -13,6 +13,13 @@ interface TokenResponse {
   client_id: string;
 }
 
+export interface GraphUserResponse {
+  displayName: string;
+  mail: string;
+  userPrincipalName: string;
+  id: string;
+}
+
 @Injectable()
 export class MicrosoftGraphClientService {
   private readonly clientId: string;
@@ -29,33 +36,49 @@ export class MicrosoftGraphClientService {
   }
 
   /**
-   * Получение токена делегирования по device code
-   * @param device_code Код устройства, полученный из device code flow
-   * @param grant_type Тип гранта (по умолчанию urn:ietf:params:oauth:grant-type:device_code)
-   * @returns Ответ с токеном доступа
-   */
-  
-  async getDelegateToken(
-    device_code: string, 
-    grant_type: string = 'urn:ietf:params:oauth:grant-type:device_code'
-    ): Promise<TokenResponse> {
-    
+  * Получение токена делегирования по authorization code
+  * @param authCode Код авторизации, полученный из callback
+  * @param scope Запрашиваемые области доступа
+  * @param redirect_uri URI перенаправления, зарегистрированный в приложении
+  * @returns Ответ с токеном доступа
+  */
+  async getDelegateToken(authCode: string, scope: string, redirect_uri: string): Promise<TokenResponse> {
     const url = `https://login.microsoftonline.com/${this.tenantId}/oauth2/v2.0/token`;
-    
+
     const requestBody = new URLSearchParams({
-        client_id: this.clientId,
-        grant_type: grant_type,
-        device_code: device_code,
+      client_id: this.clientId,
+      client_secret: this.clientSecret,
+      grant_type: 'authorization_code',
+      code: authCode,
+      redirect_uri: redirect_uri,
+      scope: scope,
     }).toString();
 
     const requestConfig = {
-        headers: {
+      headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
-        },
+      },
     };
 
-    const response = await axios.post<TokenResponse>(url, requestBody, requestConfig);    
+    const response = await axios.post<TokenResponse>(url, requestBody, requestConfig);
     return response.data;
+  }
 
-    }
+  /**
+  * Получение информации о текущем пользователе по делегатному токену
+  * @param accessToken Делегатный токен пользователя
+  * @returns Информация о пользователе
+  */
+  async getUserInfo(accessToken: string): Promise<GraphUserResponse> {
+  const url = 'https://graph.microsoft.com/v1.0/me';
+
+  const response = await axios.get<GraphUserResponse>(url, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+
+  return response.data;
+  }
+
 }

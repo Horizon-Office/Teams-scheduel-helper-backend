@@ -5,20 +5,21 @@ import {
 } from '@nestjs/common';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
-import { MicrosoftGraphClientService } from 'src/client/microsoft_graph/microsoft_graph.service';
+import { GraphUserResponse, MicrosoftGraphClientService } from 'src/client/microsoft_graph/microsoft_graph.service';
 import { ref } from 'process';
 
-interface CachedTokenData {
-    access_token: string;
-    refresh_token?: string;
-    scope: string;
-    expires_in: number;
-    ext_expires_in: number;
-    token_type: string;
-    id_token?: string;
-    client_id: string;
-    cached_at: number;
+export interface CachedTokenData {
+  access_token: string;
+  refresh_token: string;
+  scope: string;
+  expires_in: number;
+  ext_expires_in: number;
+  token_type: string;
+  id_token: string;
+  user: GraphUserResponse;
+  cached_at: number;
 }
+
 
 @Injectable()
 export class AuthService {
@@ -30,57 +31,39 @@ export class AuthService {
 
     /**
      * Validates the device code and stores the token in Redis
-     * @param device_code Device code
-     * @param grant_type Grant type (optional)
+     * @param authCode code required for delegate token
+     * @param scope required for permision in Microsoft Graph
+     * @param redirect_uri registered redirect URI
      * @returns Successful response containing the token
      */
-    async checkDeviceCode(device_code: string, grant_type?: string) {
-        const tokenResponse = await this.microsoftGraphClient.getDelegateToken(
-        device_code, 
-        grant_type
-        );
-        const cacheData = {
+    async getIdentifiedDelegateToken(authCode: string, scope: string, redirect_uri: string) {
+    
+    const tokenResponse = await this.microsoftGraphClient.getDelegateToken(authCode, scope, redirect_uri);
+
+    const userInfo = await this.microsoftGraphClient.getUserInfo(tokenResponse.access_token);
+
+    const cacheData = {
         access_token: tokenResponse.access_token,
         refresh_token: tokenResponse.refresh_token,
         scope: tokenResponse.scope,
         expires_in: tokenResponse.expires_in,
-        ext_expires_in: tokenResponse.expires_in * 2, 
+        ext_expires_in: tokenResponse.expires_in * 2,
         token_type: tokenResponse.token_type,
         id_token: tokenResponse.id_token,
-        client_id: tokenResponse.client_id,
+        user: userInfo,
         cached_at: Date.now(),
-        };
-        const cacheKey = `auth:token:${tokenResponse.access_token}`;
-        const ttl = tokenResponse.expires_in * 1000; 
-        await this.cacheManager.set(cacheKey, cacheData, ttl);
-        return {
-        access_token: tokenResponse.access_token,
-        token_type: tokenResponse.token_type,
-        expires_in: tokenResponse.expires_in,
-        scope: tokenResponse.scope,
-        refresh_token: tokenResponse.refresh_token,
+    };
+
+    const cacheKey = `auth:token:${tokenResponse.access_token}`;
+    const ttl = tokenResponse.expires_in * 1000;
+    await this.cacheManager.set(cacheKey, cacheData, ttl);
+
+    return {
+        ...tokenResponse,
         cached: true,
-        };
+        user: userInfo,
+    };
     }
-
-
-    /**
-    * Extracts token from Authorization header
-    * @param authHeader - The Authorization header (e.g., "Bearer abc123")
-    * @returns The extracted token
-    * @throws UnauthorizedException if header is invalid
-    */
-    extractTokenFromHeader(authHeader: string): string {
-        if (!authHeader) {
-        throw new UnauthorizedException('Authorization header is missing');
-        }
-        const [bearer, token] = authHeader.split(' ');
-        if (bearer !== 'Bearer' || !token) {
-        throw new UnauthorizedException('Invalid authorization header format. Expected: Bearer <token>');
-        }
-        return token;
-    }
-    
 
     /**
     * Validates if the access token exists in cache
@@ -106,5 +89,27 @@ export class AuthService {
         }
         return cachedData;
     }
+
+
+
+    /**
+    * Extracts token from Authorization header
+    * @param authHeader - The Authorization header (e.g., "Bearer abc123")
+    * @returns The extracted token
+    * @throws UnauthorizedException if header is invalid
+    */
+    extractTokenFromHeader(authHeader: string): string {
+        if (!authHeader) {
+        throw new UnauthorizedException('Authorization header is missing');
+        }
+        const [bearer, token] = authHeader.split(' ');
+        if (bearer !== 'Bearer' || !token) {
+        throw new UnauthorizedException('Invalid authorization header format. Expected: Bearer <token>');
+        }
+        return token;
+    }
+    
+
+
     
 }
