@@ -1,6 +1,7 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
+import { response } from 'express';
 
 
 interface TokenResponse {
@@ -11,6 +12,14 @@ interface TokenResponse {
   scope?: string;
   id_token?: string;
   client_id: string;
+}
+
+interface TokenRefresh {
+  token_type: string;
+  scope?: string;
+  expires_in: number;
+  access_token: string;
+  refresh_token?: string;
 }
 
 export interface GraphUserResponse {
@@ -64,6 +73,43 @@ export class MicrosoftGraphClientService {
     const response = await axios.post<TokenResponse>(url, requestBody, requestConfig);
     return response.data;
   }
+
+  
+  /**
+  * Delegate token refresh
+  * @param refresh_token token used for refresh
+  * @param scope requested access scopes
+  * @returns response with access token
+  */
+
+  async refreshDelegateToken(
+  refresh_token: string,
+  scope: string
+): Promise<TokenRefresh> {
+  const url = `https://login.microsoftonline.com/${this.tenantId}/oauth2/v2.0/token`;
+
+  const body = new URLSearchParams({
+    client_id: this.clientId,
+    client_secret: this.clientSecret,
+    grant_type: 'refresh_token',
+    refresh_token,
+    scope,
+  }).toString();
+
+    const response = await axios.post<TokenRefresh>(
+      url,
+      body,
+      {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Authorization': '' 
+        },
+      }
+    );
+
+    return response.data;
+
+}
 
   /**
   * Получение информации о текущем пользователе по делегатному токену

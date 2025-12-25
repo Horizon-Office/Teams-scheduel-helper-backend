@@ -6,7 +6,9 @@ import {
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
 import { GraphUserResponse, MicrosoftGraphClientService } from 'src/client/microsoft_graph/microsoft_graph.service';
-import { ref } from 'process';
+import { ref } from  'process';
+import { response } from 'express';
+import { access } from 'fs';
 
 type Role = 'admin' | 'dispatcher';
 const VALID_ROLES: Role[] = ['admin', 'dispatcher'];
@@ -16,14 +18,18 @@ export interface CachedTokenData {
   refresh_token: string;
   scope: string;
   expires_in: number;
-  ext_expires_in: number;
   token_type: string;
   id_token: string;
-  user: GraphUserResponse;
   cached_at: number;
   jobTitle: string;
+  mail:string
 }
 
+export interface validateAccessTokenResponse {
+    validate: boolean,
+    access_token?: string,
+    refresh_token?: string,
+}
 
 @Injectable()
 export class AuthService {
@@ -42,42 +48,50 @@ export class AuthService {
      */
     async getIdentifiedDelegateToken(authCode: string, scope: string, redirect_uri: string) {
 
-    const tokenResponse = await this.microsoftGraphClient.getDelegateToken(authCode, scope, redirect_uri);
-    const userInfo = await this.microsoftGraphClient.getUserInfo(tokenResponse.access_token);
+        const tokenResponse = await this.microsoftGraphClient.getDelegateToken(authCode, scope, redirect_uri);
+        const userInfo = await this.microsoftGraphClient.getUserInfo(tokenResponse.access_token);
 
-    try {
-        const role = userInfo.jobTitle as Role;
+        try {
+            const role = userInfo.jobTitle as Role;
+            const email = userInfo.mail;
+            if (!VALID_ROLES.includes(role)) {
+                throw new Error(`Invalid role: ${role}`);
+            }
+            if (email) {
+                const mailKey = `auth:mail:${email}`;
+                const oldToken: string | null | undefined = await this.cacheManager.get(mailKey);
 
-        if (!VALID_ROLES.includes(role)) {
-            throw new Error(`Invalid role: ${role}`);
-        }
+                if (oldToken) {
+                    await this.cacheManager.del(`auth:token:${oldToken}`);
+                }
+                await this.cacheManager.set(mailKey, tokenResponse.access_token, tokenResponse.expires_in * 1000);
+            }
             
-        const cacheData = {
-            access_token: tokenResponse.access_token,
-            refresh_token: tokenResponse.refresh_token,
-            scope: tokenResponse.scope,
-            expires_in: tokenResponse.expires_in,
-            ext_expires_in: tokenResponse.expires_in * 2,
-            token_type: tokenResponse.token_type,
-            id_token: tokenResponse.id_token,
-            user: userInfo,
-            jobTitle: userInfo.jobTitle,
-            cached_at: Date.now(),
-        };
+            const cacheData = {
+                access_token: tokenResponse.access_token,
+                refresh_token: tokenResponse.refresh_token,
+                scope: tokenResponse.scope,
+                expires_in: tokenResponse.expires_in,
+                token_type: tokenResponse.token_type,
+                id_token: tokenResponse.id_token,
+                jobTitle: userInfo.jobTitle,
+                mail: email,
+                cached_at: Date.now(),
+            };
 
-        const cacheKey = `auth:token:${tokenResponse.access_token}`;
-        const ttl = tokenResponse.expires_in * 1000;
-        await this.cacheManager.set(cacheKey, cacheData, ttl);
-
-        return {
-            ...tokenResponse,
-            cached: true,
-            user: userInfo,
-        };
-    } catch (error) {
-        console.error("Authtorization failed by ivalide role:", error);
-        throw error; 
-    }
+            const cacheKey = `auth:token:${tokenResponse.access_token}`;
+            const ttl = tokenResponse.expires_in * 1000;
+            await this.cacheManager.set(cacheKey, cacheData, ttl);
+            return {
+                ...tokenResponse,
+                cached: true,
+                user: userInfo,
+            };
+        } 
+        catch (error) {
+            console.error("Authorization failed by invalid role or error:", error);
+            throw error;
+        }
     }
 
     /**
@@ -87,9 +101,6 @@ export class AuthService {
     * @throws UnauthorizedException if token is invalid or expired
     */
     async validateAccessToken(accessToken: string): Promise<CachedTokenData> {
-        if (!accessToken || accessToken.trim() === '') {
-            throw new UnauthorizedException('Access token is required');
-        }
 
         const cacheKey = `auth:token:${accessToken}`;
         const cachedData: CachedTokenData | null | undefined = await this.cacheManager.get(cacheKey);
@@ -97,26 +108,81 @@ export class AuthService {
         if (!cachedData) {
             throw new UnauthorizedException('Invalid or expired token');
         }
-
-        // 1. Проверка срока действия
         const now = Date.now();
         const expiresAt = cachedData.cached_at + (cachedData.expires_in * 1000);
-
         if (now > expiresAt) {
+            if (cachedData.refresh_token) {
+                try {
+                    const refreshed = await this.refreshDelegateToken(
+                        cachedData.refresh_token, 
+                        cachedData.scope
+                    );
+                    return {
+                        ...refreshed,
+                        jobTitle: refreshed.user.jobTitle,
+                        mail: refreshed.user.mail,
+                        cached_at: Date.now() 
+                    } as unknown as CachedTokenData;
+                } catch (error) {
+                    await this.cacheManager.del(cacheKey);
+                    throw new UnauthorizedException('Session expired and refresh failed');
+                }
+            }
             await this.cacheManager.del(cacheKey);
             throw new UnauthorizedException('Token has expired');
         }
-
-        // 2. Проверка роли напрямую из поля jobTitle в кеше
         const role = cachedData.jobTitle as Role;
 
         if (!role || !VALID_ROLES.includes(role)) {
-            // Если роли нет или она не входит в список разрешенных
             await this.cacheManager.del(cacheKey);
             throw new UnauthorizedException(`Access denied: Invalid or missing role "${role}"`);
         }
-
         return cachedData;
+    }
+
+    /**
+    * Refresh token
+    * @param refresh_token - The refresh token token  (string)
+    * @param scope required for permision in Microsoft Graph
+    * @returns The cached token data if valid
+    * @throws UnauthorizedException if refresh token 
+    */
+    async refreshDelegateToken(refreshToken: string, scope: string) {
+
+        const tokenResponse = await this.microsoftGraphClient.refreshDelegateToken(refreshToken, scope);
+        const userInfo = await this.microsoftGraphClient.getUserInfo(tokenResponse.access_token);
+        
+        const email = userInfo.mail;
+        const role = userInfo.jobTitle as Role;
+
+        if (!VALID_ROLES.includes(role)) {
+            throw new UnauthorizedException(`Invalid role after refresh: ${role}`);
+        }
+
+        if (email) {
+            const mailKey = `auth:mail:${email}`;
+            const oldToken = await this.cacheManager.get<string>(mailKey);
+            if (oldToken) {
+                await this.cacheManager.del(`auth:token:${oldToken}`);
+            }
+            await this.cacheManager.set(mailKey, tokenResponse.access_token, tokenResponse.expires_in * 1000);
+        }
+
+        const cacheData = {
+            ...tokenResponse,
+            jobTitle: role,
+            mail: email,
+            cached_at: Date.now(),
+        };
+
+        const cacheKey = `auth:token:${tokenResponse.access_token}`;
+        await this.cacheManager.set(cacheKey, cacheData, tokenResponse.expires_in * 1000);
+
+        return {
+            ...tokenResponse,
+            user: userInfo,
+            cached: true
+        };
     }
 
 
@@ -127,6 +193,7 @@ export class AuthService {
     * @throws UnauthorizedException if header is invalid
     */
     extractTokenFromHeader(authHeader: string): string {
+
         if (!authHeader) {
         throw new UnauthorizedException('Authorization header is missing');
         }
@@ -136,8 +203,5 @@ export class AuthService {
         }
         return token;
     }
-    
-
-
     
 }

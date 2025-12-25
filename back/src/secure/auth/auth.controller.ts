@@ -16,6 +16,7 @@ import {
 import { AuthCodeDto} from './dto/authToken.dto/authCode.dto';
 import { AuthService } from './auth.service';
 import { ValidateTokenDto } from './dto/validateToken.dto/validateToken.dto';
+import { RefreshTokenDto } from './dto/refreshToken.dto/refreshToken.dto';
 
 @ApiTags('Authentication') 
 @Controller('auth')
@@ -42,6 +43,21 @@ export class AuthController {
         message: 'Device code verification failed: ' + error.message,
         error: 'Authentication Error'
       });
+    }
+  }
+
+  @Post('refreshToken')
+  @HttpCode(HttpStatus.OK) 
+  async refresh(@Body() refreshTokenDto: RefreshTokenDto) {
+    try {
+      const result = await this.authService.refreshDelegateToken(
+        refreshTokenDto.refresh_token,
+        refreshTokenDto.scope
+      );
+      
+      return result;
+    } catch (error) {
+      throw error;
     }
   }
 
