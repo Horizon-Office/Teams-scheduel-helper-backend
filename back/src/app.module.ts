@@ -6,6 +6,7 @@ import { ScheduleModule } from './schedule/schedule.module';
 import { SecureModule } from './secure/secure.module';
 import { ClientModule } from './client/client.module';
 import { CacheModule } from '@nestjs/cache-manager';
+import { MembersModule } from './members/members.module';
 import clientConfig from './config/client.config';
 import databaseConfig from './config/database.config';
 import microsoftConfig from './config/microsoftgraph.config';
@@ -58,6 +59,7 @@ import * as redisStore from 'cache-manager-redis-store';
     ScheduleModule,
     SecureModule,
     ClientModule,
+    MembersModule,
     
   ],
 })

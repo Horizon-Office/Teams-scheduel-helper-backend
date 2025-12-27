@@ -13,10 +13,10 @@ import {
   ApiResponse, 
   ApiBody 
 } from '@nestjs/swagger';
-import { AuthCodeDto} from './dto/authToken.dto/authCode.dto';
+import { AuthCodeDto} from './dto/auth-Token.dto/authCode.dto';
 import { AuthService } from './auth.service';
-import { ValidateTokenDto } from './dto/validateToken.dto/validateToken.dto';
-import { RefreshTokenDto } from './dto/refreshToken.dto/refreshToken.dto';
+import { ValidateTokenDto } from './dto/validate-Token.dto/validateToken.dto';
+import { RefreshTokenDto } from './dto/refresh-Token.dto/refreshToken.dto';
 
 @ApiTags('Authentication') 
 @Controller('auth')
