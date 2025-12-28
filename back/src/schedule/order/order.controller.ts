@@ -74,7 +74,7 @@ export class OrderController {
         @Body() patchOrderDto: PatchOrderDto
     ) {
         try {
-            return await this.orderService.patchOrder(id, patchOrderDto);
+            return await this.orderService.PatchOrder(id, patchOrderDto);
         } catch (error) {
             throw new BadRequestException({
                 statusCode: HttpStatus.BAD_REQUEST,
@@ -87,7 +87,7 @@ export class OrderController {
     @Delete(':id')
     async deleteSingleOrder(@Param('id') id: string) {
         try {
-            return await this.orderService.deleteOrder(id);
+            return await this.orderService.DeleteOrder(id);
         } catch (error) {
             throw new BadRequestException({
                 statusCode: HttpStatus.BAD_REQUEST,
@@ -100,7 +100,7 @@ export class OrderController {
     @Delete('batch')
     async deleteMultipleOrders(@Body() deleteOrderDto: DeleteOrderDto) {
         try {
-            return await this.orderService.deleteMultipleOrders(deleteOrderDto);
+            return await this.orderService.DeleteMultipleOrders(deleteOrderDto);
         } catch (error) {
             throw new BadRequestException({
                 statusCode: HttpStatus.BAD_REQUEST,

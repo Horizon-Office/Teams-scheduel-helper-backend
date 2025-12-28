@@ -21,10 +21,14 @@ export class Team {
   @Column({ length: 255 })
   description: string;
 
-  @ManyToOne(() => Member, (member) => member.teams, {
-    onDelete: 'CASCADE',
+  @ManyToMany(() => Member, (member) => member.teams, {
+    cascade: ['insert', 'update'],
   })
-  member: Member;
+  @JoinTable({
+    name: 'team_member',
+  })
+  members: Member[];
+
 
   @ManyToMany(() => Order, (order) => order.teams)
   @JoinTable({

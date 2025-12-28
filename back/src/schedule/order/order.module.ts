@@ -13,6 +13,9 @@ import { Event } from '../team-event/entities/team_event.entity'
   imports: [
     MicrosoftGraphImportModule,
     TypeOrmModule.forFeature([Order, Team, Event]),
-  ]
+  ],
+  exports:[TypeOrmModule]
+
+  
 })
 export class OrderModule {}

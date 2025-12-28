@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
+
 import { Order } from './entities/order.entity';
 import { Team } from '../../schedule/team/entities/team.entity';
 
@@ -105,11 +106,10 @@ export class OrderService {
     }
 
 
-    async patchOrder(id: string, dto: PatchOrderDto): Promise<Order> {
+    async PatchOrder(id: string, dto: PatchOrderDto): Promise<Order> {
 
         const order = await this.orderRepository.findOne({
             where: { id },
-            relations: ['teams']
         });
         if (!order) {
             throw new NotFoundException(`Order with ID ${id} not found`);
@@ -133,10 +133,9 @@ export class OrderService {
         return await this.orderRepository.save(order);
     }
 
-    async deleteOrder(id: string): Promise<{ message: string }> {
+    async DeleteOrder(id: string): Promise<{ message: string }> {
         const order = await this.orderRepository.findOne({
-            where: { id },
-            relations: ['teams']
+            where: { id }
         });
         
         if (!order) {
@@ -150,7 +149,7 @@ export class OrderService {
     }
 
 
-    async deleteMultipleOrders(dto: DeleteOrderDto): Promise<{ 
+    async DeleteMultipleOrders(dto: DeleteOrderDto): Promise<{ 
         message: string, 
         deletedCount: number 
     }> {

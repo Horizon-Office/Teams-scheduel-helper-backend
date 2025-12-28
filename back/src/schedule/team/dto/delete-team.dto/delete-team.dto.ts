@@ -1,5 +1,6 @@
 import {
   IsArray,
+  IsBoolean,
   IsInt,
   IsNotEmpty,
   IsOptional,
@@ -8,26 +9,17 @@ import {
   Min,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import { UUID } from 'crypto';
 
-export class CreateOrderDto {
-
+export class DeleteTeamDto {
   @IsNotEmpty()
-  @IsString()
-  name: string;
-
-  @IsInt()
-  @Min(0)
-  @Type(() => Number)
-  student_count: number;
-
-  @IsNotEmpty()
-  @IsString()
-  department: string;
-
-  @IsOptional()
   @IsArray()
   @IsUUID('4', { each: true })
   @Type(() => String)
   teamIds?: string[];
-  
+
+  @IsOptional()
+  @IsBoolean()
+  softDelete?: boolean
+
 }

@@ -3,6 +3,7 @@ import {
   PrimaryGeneratedColumn,
   Column,
   OneToMany,
+  ManyToMany,
 } from 'typeorm';
 import { Team } from '../../schedule/team/entities/team.entity';
 
@@ -17,6 +18,6 @@ export class Member {
   @Column({ unique: true, length: 255 })
   email: string;
 
-  @OneToMany(() => Team, (team) => team.member)
+  @ManyToMany(() => Team, (team) => team.members)
   teams: Team[];
 }
