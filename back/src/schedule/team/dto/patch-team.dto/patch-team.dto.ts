@@ -1,40 +1,51 @@
 import {
   IsArray,
-  IsInt,
-  IsNotEmpty,
   IsOptional,
   IsString,
   IsUUID,
-  Min,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import { ApiPropertyOptional } from '@nestjs/swagger';
 
 export class PatchTeamDto {
-    
-    @IsOptional()
-    @IsString()
-    name?: string;
-    
-    @IsOptional()
-    @IsString()
-    description?: string;
 
-    @IsOptional()
-    @IsArray()
-    @IsUUID('4', { each: true })
-    @Type(() => String)
-    memberIds?: string[];
+  @ApiPropertyOptional({ example: 'New team name' })
+  @IsOptional()
+  @IsString()
+  name?: string;
 
-    @IsOptional()
-    @IsArray()
-    @IsUUID('4', { each: true })
-    @Type(() => String)
-    orderIds?: string[];
+  @ApiPropertyOptional({ example: 'Team description' })
+  @IsOptional()
+  @IsString()
+  description?: string;
 
-    @IsOptional()
-    @IsArray()
-    @IsUUID('4', { each: true })
-    @Type(() => String)
-    eventsIds?: string[];
+  @ApiPropertyOptional({
+    example: ['uuid-1', 'uuid-2'],
+    type: [String],
+  })
+  @IsOptional()
+  @IsArray()
+  @IsUUID('4', { each: true })
+  @Type(() => String)
+  memberIds?: string[];
 
+  @ApiPropertyOptional({
+    example: ['uuid-1'],
+    type: [String],
+  })
+  @IsOptional()
+  @IsArray()
+  @IsUUID('4', { each: true })
+  @Type(() => String)
+  orderIds?: string[];
+
+  @ApiPropertyOptional({
+    example: ['uuid-1'],
+    type: [String],
+  })
+  @IsOptional()
+  @IsArray()
+  @IsUUID('4', { each: true })
+  @Type(() => String)
+  eventsIds?: string[];
 }

@@ -1,24 +1,24 @@
 import {
-  IsArray,
-  IsInt,
+  IsBoolean,
   IsNotEmpty,
   IsOptional,
-  IsBoolean,
-  IsString,
-  IsUUID,
-  Min,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class PaginateOrderDto {
+
+  @ApiProperty({ example: 1 })
   @IsNotEmpty()
   @Type(() => Number)
   page: number;
-  
+
+  @ApiProperty({ example: 10 })
   @IsNotEmpty()
   @Type(() => Number)
   limit: number;
 
+  @ApiPropertyOptional({ example: true, default: true })
   @IsOptional()
   @IsBoolean()
   @Type(() => Boolean)

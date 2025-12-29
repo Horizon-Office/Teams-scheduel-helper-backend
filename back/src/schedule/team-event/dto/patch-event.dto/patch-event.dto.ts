@@ -3,7 +3,6 @@ import {
   IsDate,
   IsEnum,
   IsInt,
-  IsNotEmpty,
   IsOptional,
   IsString,
   IsUUID,
@@ -11,8 +10,8 @@ import {
   ArrayMinSize,
   ArrayMaxSize,
 } from 'class-validator';
-import { Type } from 'class-transformer';
-import { Transform } from 'class-transformer';
+import { Type, Transform } from 'class-transformer';
+import { ApiPropertyOptional } from '@nestjs/swagger';
 
 export enum DayOfWeek {
   Sunday = 'sunday',
@@ -25,59 +24,77 @@ export enum DayOfWeek {
 }
 
 export class PatchEventDto {
-    
-    @IsOptional()
-    @IsString()
-    subject?: string;
-    
-    @IsOptional()
-    @IsString()
-    content?: string;
 
-    @IsOptional()
-    @IsDate()
-    @Type(() => Date) // ← ДОБАВЬТЕ
-    startDateTime?: Date;
+  @ApiPropertyOptional({ example: 'Math Lecture' })
+  @IsOptional()
+  @IsString()
+  subject?: string;
 
-    @IsOptional()
-    @IsDate()
-    @Type(() => Date) 
-    endDateTime?: Date;
+  @ApiPropertyOptional({ example: 'Detailed content of the lecture' })
+  @IsOptional()
+  @IsString()
+  content?: string;
 
-    @IsOptional()
-    @IsDate()
-    @Type(() => Date) 
-    startDateRange?: Date;
+  @ApiPropertyOptional({ example: '2025-12-31T09:00:00.000Z', type: String, format: 'date-time' })
+  @IsOptional()
+  @IsDate()
+  @Type(() => Date)
+  startDateTime?: Date;
 
-    @IsOptional()
-    @IsDate()
-    @Type(() => Date) 
-    endDateRange?: Date;
+  @ApiPropertyOptional({ example: '2025-12-31T11:00:00.000Z', type: String, format: 'date-time' })
+  @IsOptional()
+  @IsDate()
+  @Type(() => Date)
+  endDateTime?: Date;
 
-    @IsOptional()
-    @IsString()
-    type?: string;
+  @ApiPropertyOptional({ example: '2025-12-01T00:00:00.000Z', type: String, format: 'date-time' })
+  @IsOptional()
+  @IsDate()
+  @Type(() => Date)
+  startDateRange?: Date;
 
-    @IsOptional()
-    @IsInt()
-    @Min(1)
-    interval?: number;
+  @ApiPropertyOptional({ example: '2025-12-31T23:59:59.000Z', type: String, format: 'date-time' })
+  @IsOptional()
+  @IsDate()
+  @Type(() => Date)
+  endDateRange?: Date;
 
-    @IsOptional()
-    @IsArray()
-    @IsEnum(DayOfWeek, { each: true }) 
-    @ArrayMinSize(1) 
-    @ArrayMaxSize(7)
-    @Transform(({ value }) => {
-      if (!value) return value;
-      return value.map(day => day.toLowerCase());
-    })
-    daysOfWeek?: DayOfWeek[];
+  @ApiPropertyOptional({ example: 'lecture' })
+  @IsOptional()
+  @IsString()
+  type?: string;
 
-    @IsOptional()
-    @IsArray()
-    @IsUUID('4', { each: true })
-    @Type(() => String)
-    teamIds?: string[];
+  @ApiPropertyOptional({ example: 2, minimum: 1 })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  interval?: number;
 
+  @ApiPropertyOptional({
+    example: ['monday', 'wednesday', 'friday'],
+    enum: DayOfWeek,
+    isArray: true,
+    minItems: 1,
+    maxItems: 7,
+  })
+  @IsOptional()
+  @IsArray()
+  @IsEnum(DayOfWeek, { each: true })
+  @ArrayMinSize(1)
+  @ArrayMaxSize(7)
+  @Transform(({ value }) => {
+    if (!value) return value;
+    return value.map(day => day.toLowerCase());
+  })
+  daysOfWeek?: DayOfWeek[];
+
+  @ApiPropertyOptional({
+    example: ['550e8400-e29b-41d4-a716-446655440000'],
+    type: [String],
+  })
+  @IsOptional()
+  @IsArray()
+  @IsUUID('4', { each: true })
+  @Type(() => String)
+  teamIds?: string[];
 }
