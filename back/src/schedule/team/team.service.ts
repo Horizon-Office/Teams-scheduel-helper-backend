@@ -147,7 +147,21 @@ export class TeamService {
         }
 
     async PaginateTeam(dto: PaginateTeamDto): Promise<PaginatedTeam> {
-            const { page, limit } = dto;
+            const { page, limit, includeOrders = false, includeMembers = false, includeEvents = false  } = dto;
+            
+            const relations: string[] = [];
+
+            if (includeEvents) {
+                relations.push('events');
+            }
+
+            if (includeMembers) {
+                relations.push('members');
+            }
+
+            if (includeOrders) {
+                relations.push('orders');
+            }
             
             const [data, total] = await this.teamRepository.findAndCount({
             skip: (page - 1) * limit,

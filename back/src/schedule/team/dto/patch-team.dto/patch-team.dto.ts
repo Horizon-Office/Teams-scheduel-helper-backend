@@ -11,11 +11,11 @@ import { Type } from 'class-transformer';
 
 export class PatchTeamDto {
     
-    @IsNotEmpty()
+    @IsOptional()
     @IsString()
     name?: string;
     
-    @IsNotEmpty()
+    @IsOptional()
     @IsString()
     description?: string;
 

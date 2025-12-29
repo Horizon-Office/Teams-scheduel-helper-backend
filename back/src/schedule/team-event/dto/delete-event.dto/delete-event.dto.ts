@@ -1,26 +1,25 @@
 import {
   IsArray,
+  IsBoolean,
   IsInt,
   IsNotEmpty,
   IsOptional,
-  IsBoolean,
   IsString,
   IsUUID,
   Min,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import { UUID } from 'crypto';
 
-export class PaginateOrderDto {
+export class DeleteEventDto {
   @IsNotEmpty()
-  @Type(() => Number)
-  page: number;
-  
-  @IsNotEmpty()
-  @Type(() => Number)
-  limit: number;
+  @IsArray()
+  @IsUUID('4', { each: true })
+  @Type(() => String)
+  eventIds?: string[];
 
   @IsOptional()
   @IsBoolean()
-  @Type(() => Boolean)
-  includeTeams?: boolean = true;
+  softDelete?: boolean
+
 }

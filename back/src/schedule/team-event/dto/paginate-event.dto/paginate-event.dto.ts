@@ -10,7 +10,7 @@ import {
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
-export class PaginateTeamDto {
+export class PaginateEventDto {
     
     @IsNotEmpty()
     @Type(() => Number)
@@ -23,17 +23,7 @@ export class PaginateTeamDto {
     @IsOptional()
     @IsBoolean()
     @Type(() => Boolean)
-    includeMembers?: boolean = true;
-    
-    @IsOptional()
-    @IsBoolean()
-    @Type(() => Boolean)
-    includeOrders?: boolean = true;
-      
-    @IsOptional()
-    @IsBoolean()
-    @Type(() => Boolean)
-    includeEvents?: boolean = true;
+    includeTeams?: boolean = false;
       
 
 }

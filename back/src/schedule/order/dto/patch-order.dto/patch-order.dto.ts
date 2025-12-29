@@ -10,16 +10,17 @@ import {
 import { Type } from 'class-transformer';
 
 export class PatchOrderDto {
-  @IsNotEmpty()
+  @IsOptional()
   @IsString()
   name?: string;
 
+  @IsOptional()
   @IsInt()
   @Min(0)
   @Type(() => Number)
   student_count?: number;
 
-  @IsNotEmpty()
+  @IsOptional()
   @IsString()
   department?: string;
 

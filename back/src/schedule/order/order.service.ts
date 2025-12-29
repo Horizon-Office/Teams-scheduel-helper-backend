@@ -62,8 +62,13 @@ export class OrderService {
     }
 
     async PaginateOrder(dto: PaginateOrderDto): Promise<PaginatedOrders> {
-        const { page, limit } = dto;
+        const { page, limit, includeTeams = false } = dto;
         
+        const relations: string[] = [];
+        if (includeTeams) {
+            relations.push('teams');
+        }
+
         const [data, total] = await this.orderRepository.findAndCount({
         skip: (page - 1) * limit,
         take: limit,
