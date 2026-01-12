@@ -3,6 +3,8 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  IsInt,
+  Min,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiPropertyOptional } from '@nestjs/swagger';
@@ -19,8 +21,36 @@ export class PatchTeamDto {
   @IsString()
   description?: string;
 
+  @ApiPropertyOptional({ example: 32 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  studentCount?: number;
+
+  @ApiPropertyOptional({ example: 12 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  weekCount?: number;
+
+  @ApiPropertyOptional({ example: 40 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  hoursPerWeekCount?: number;
+
+  @ApiPropertyOptional({ example: 20 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  hoursPerWeekPracticeCount?: number;
+
   @ApiPropertyOptional({
-    example: ['uuid-1', 'uuid-2'],
+    example: ['550e8400-e29b-41d4-a716-446655440000'],
     type: [String],
   })
   @IsOptional()
@@ -30,7 +60,7 @@ export class PatchTeamDto {
   memberIds?: string[];
 
   @ApiPropertyOptional({
-    example: ['uuid-1'],
+    example: ['550e8400-e29b-41d4-a716-446655440001'],
     type: [String],
   })
   @IsOptional()
@@ -40,7 +70,7 @@ export class PatchTeamDto {
   orderIds?: string[];
 
   @ApiPropertyOptional({
-    example: ['uuid-1'],
+    example: ['550e8400-e29b-41d4-a716-446655440002'],
     type: [String],
   })
   @IsOptional()

@@ -15,6 +15,9 @@ export class Member {
   @Column({ length: 255 })
   department: string;
 
+  @Column({ type: 'boolean', default: false })
+  is_teacher: boolean;
+
   @Column({ unique: true, length: 255 })
   email: string;
 

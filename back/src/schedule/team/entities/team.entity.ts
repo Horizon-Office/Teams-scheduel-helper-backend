@@ -21,6 +21,18 @@ export class Team {
   @Column({ length: 255 })
   description: string;
 
+  @Column({ type: 'int', default: 0 })
+  student_count: number;
+
+  @Column({ type: 'int', default: 0 })
+  week_count: number;
+
+  @Column({ type: 'int', default: 0 })
+  hours_perWeek_count: number;
+
+  @Column({ type: 'int', default: 0 })
+  hours_perWeek_practice_count: number;
+
   @ManyToMany(() => Member, (member) => member.teams, {
     cascade: ['insert', 'update'],
   })
@@ -28,7 +40,6 @@ export class Team {
     name: 'team_member',
   })
   members: Member[];
-
 
   @ManyToMany(() => Order, (order) => order.teams)
   @JoinTable({
@@ -43,4 +54,5 @@ export class Team {
     name: 'team_event',
   })
   events: Event[];
+
 }

@@ -51,6 +51,10 @@ export class TeamService {
         const team = this.teamRepository.create({
             name: dto.name,
             description: dto.description,
+            student_count: dto.studentCount ?? 0,
+            week_count: dto.weekCount ?? 0,
+            hours_perWeek_count: dto.hoursPerWeekCount ?? 0,
+            hours_perWeek_practice_count: dto.hoursPerWeekPracticeCount ?? 0,
         })
 
         if (dto.orderIds?.length) {
