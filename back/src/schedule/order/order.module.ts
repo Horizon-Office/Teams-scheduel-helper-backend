@@ -6,13 +6,14 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { Order } from './entities/order.entity';
 import { Team } from '../team/entities/team.entity'
 import { Event } from '../team-event/entities/team_event.entity'
+import { Faculty } from '../faculty/entities/faculty.entity';
 
 @Module({
   controllers: [OrderController],
   providers: [OrderService],
   imports: [
     MicrosoftGraphImportModule,
-    TypeOrmModule.forFeature([Order, Team, Event]),
+    TypeOrmModule.forFeature([Order, Team, Event, Faculty]),
   ],
   exports:[TypeOrmModule]
 

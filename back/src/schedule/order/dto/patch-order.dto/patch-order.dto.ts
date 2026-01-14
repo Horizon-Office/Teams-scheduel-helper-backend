@@ -10,7 +10,6 @@ import { Type } from 'class-transformer';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 
 export class PatchOrderDto {
-
   @ApiPropertyOptional({ example: 'Order for CS students' })
   @IsOptional()
   @IsString()
@@ -23,10 +22,13 @@ export class PatchOrderDto {
   @Type(() => Number)
   student_count?: number;
 
-  @ApiPropertyOptional({ example: 'Computer Science' })
+ @ApiPropertyOptional({
+  example: '550e8400-e29b-41d4-a716-446655440000',
+  description: 'ID факультету',
+  })
   @IsOptional()
-  @IsString()
-  department?: string;
+  @IsUUID('4', { message: 'ID факультету має бути валідним UUID' })
+  facultyId?: string;
 
   @ApiPropertyOptional({
     example: ['550e8400-e29b-41d4-a716-446655440000'],

@@ -5,10 +5,11 @@ import {
 
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, In } from 'typeorm';
+import { Repository, In, SelectQueryBuilder } from 'typeorm';
 
 import { Order } from './entities/order.entity';
 import { Team } from '../../schedule/team/entities/team.entity';
+import { Faculty } from '../../schedule/faculty/entities/faculty.entity';
 
 import { CreateOrderDto } from './dto/create-order.dto/create-order.dto';
 import { GetIdOrderDto } from './dto/id-order.dto/id-order.dto';
@@ -22,6 +23,7 @@ export interface PaginatedOrders {
     total: number;
     page: number;
     limit: number;
+    search: string | undefined;
     totalPages: number;
     hasNextPage: boolean;
     hasPrevPage: boolean;
@@ -34,47 +36,62 @@ export class OrderService {
         @InjectRepository(Order)
         private readonly orderRepository: Repository<Order>,
 
+        @InjectRepository(Faculty)
+        private readonly facultyRepository: Repository<Faculty>,
+
         @InjectRepository(Team)
         private readonly teamRepository: Repository<Team>,
     ) {}
 
-    async CreateOrder(dto: CreateOrderDto): Promise<Order> {
+   async CreateOrder(dto: CreateOrderDto): Promise<Order> {
         const order = this.orderRepository.create({
             name: dto.name,
-            student_count: dto.student_count,
-            department: dto.department,
+            student_count: dto.student_count
         });
 
+        if (dto.facultyId) {
+            const faculty = await this.facultyRepository.findOne({
+                where: { id: dto.facultyId }
+            });
+            
+            if (!faculty) {
+                throw new NotFoundException(`Faculty with ID ${dto.facultyId} not found`);
+            }
+            
+            order.faculty = faculty;
+        }
         if (dto.teamIds?.length) {
             const teams = await this.teamRepository.find({
-            where: { id: In(dto.teamIds) },
+                where: { id: In(dto.teamIds) },
             });
 
             if (teams.length !== dto.teamIds.length) {
-            throw new NotFoundException('One or more teams not found');
+                throw new NotFoundException('One or more teams not found');
             }
 
             order.teams = teams;
         }
 
         return this.orderRepository.save(order);
-
     }
 
     async PaginateOrder(dto: PaginateOrderDto): Promise<PaginatedOrders> {
-        const { page, limit, includeTeams = false } = dto;
+        const { page, limit, facultyId, search, includeTeams = false } = dto;
         
-        const relations: string[] = [];
+        const queryBuilder = this.orderRepository.createQueryBuilder('order');
+        this.applyFilters(queryBuilder, facultyId, search);
+
         if (includeTeams) {
-            relations.push('teams');
+            queryBuilder.leftJoinAndSelect('order.teams', 'teams');
         }
-
-        const [data, total] = await this.orderRepository.findAndCount({
-        skip: (page - 1) * limit,
-        take: limit,
-        relations: ['teams'],
-        });
-
+        
+        queryBuilder.orderBy('order.name', 'ASC');
+        
+        const [data, total] = await queryBuilder
+            .skip((page - 1) * limit)
+            .take(limit)
+            .getManyAndCount();
+        
         const totalPages = Math.ceil(total / limit);
         const hasNextPage = page < totalPages;
         const hasPrevPage = page > 1;
@@ -85,11 +102,42 @@ export class OrderService {
                 total,
                 page,
                 limit,
+                search,
                 totalPages,
                 hasNextPage,
                 hasPrevPage,
             },
         };
+    }
+
+    private applyFilters(
+      queryBuilder: SelectQueryBuilder<Order>, 
+      faculty?: string, 
+      search?: string
+    ): void {
+        if (faculty) {
+            
+            queryBuilder.innerJoin('order.faculty', 'faculty')
+                .andWhere('faculty.id = :facultyId', { facultyId: faculty });
+
+        } else {
+            queryBuilder.leftJoinAndSelect('order.faculty', 'faculty');
+        }
+        
+        if (search) {
+            
+            const searchWords = search.trim().split(/\s+/).filter(word => word.length > 0);
+
+            if (searchWords.length > 0) {
+                const orConditions = searchWords.map((word, index) => {
+                    const paramName = `search${index}`;
+                    queryBuilder.setParameter(paramName, `%${word}%`);
+                    return `order.name ILIKE :${paramName}`;
+                });
+                
+                queryBuilder.andWhere(`(${orConditions.join(' OR ')})`);
+            }
+        }
     }
 
     async GetByIdOrder(dto: GetIdOrderDto): Promise<Order> {
@@ -112,22 +160,33 @@ export class OrderService {
 
 
     async PatchOrder(id: string, dto: PatchOrderDto): Promise<Order> {
-
         const order = await this.orderRepository.findOne({
             where: { id },
+            relations: ['faculty', 'teams'] // ДОДАЄМО relations!
         });
+        
         if (!order) {
             throw new NotFoundException(`Order with ID ${id} not found`);
         }
 
+        // Оновлюємо прості поля
         if (dto.name !== undefined) {
             order.name = dto.name;
         }
         if (dto.student_count !== undefined) {
             order.student_count = dto.student_count;
         }
-        if (dto.department !== undefined) {
-            order.department = dto.department;
+        
+        if (dto.facultyId !== undefined) {
+            const faculty = await this.facultyRepository.findOne({
+                where: { id: dto.facultyId }
+            });
+            
+            if (!faculty) {
+                throw new NotFoundException(`Faculty with ID ${dto.facultyId} not found`);
+            }
+            
+            order.faculty = faculty;
         }
         
         if (dto.teamIds !== undefined) {

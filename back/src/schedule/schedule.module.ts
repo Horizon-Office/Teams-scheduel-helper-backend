@@ -3,6 +3,7 @@ import { MicrosoftGraphImportModule } from './microsoft-graph-import/microsoft_g
 import { OrderModule } from './order/order.module';  
 import { TeamEventModule } from './team-event/team_event.module';
 import { TeamModule } from './team/team.module';
+import { FacultyModule } from './faculty/faculty.module';
 
 
 @Module({
@@ -11,6 +12,7 @@ import { TeamModule } from './team/team.module';
     TeamModule, 
     OrderModule, 
     MicrosoftGraphImportModule,
+    FacultyModule
   ],
 })
 export class ScheduleModule {}

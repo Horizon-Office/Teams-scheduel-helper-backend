@@ -23,10 +23,11 @@ export class CreateOrderDto {
   @Type(() => Number)
   student_count: number;
 
-  @ApiProperty({ example: 'Computer Science' })
-  @IsNotEmpty()
-  @IsString()
-  department: string;
+  @ApiProperty({ example: 'uuid-факультета' })
+  @IsOptional()
+  @IsUUID('4', { message: 'Faculty ID має бути валідним UUID' })
+  facultyId?: string; 
+
 
   @ApiPropertyOptional({
     example: ['550e8400-e29b-41d4-a716-446655440000'],
