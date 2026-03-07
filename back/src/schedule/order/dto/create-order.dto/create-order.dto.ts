@@ -18,10 +18,11 @@ export class CreateOrderDto {
   name: string;
 
   @ApiProperty({ example: 25, minimum: 0 })
+  @IsOptional()
   @IsInt()
   @Min(0)
   @Type(() => Number)
-  student_count: number;
+  student_count?: number;
 
   @ApiProperty({ example: 'uuid-факультета' })
   @IsOptional()
