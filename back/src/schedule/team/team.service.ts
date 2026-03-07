@@ -9,12 +9,12 @@ import { Repository, In } from 'typeorm';
 import { Order } from '../order/entities/order.entity';
 import { Member } from 'src/members/entities/member.entity';
 import { Event } from '../team-event/entities/team_event.entity';
-import { CreateTeamDto } from './dto/create-team.dto/create-team.dto';
+import { CreateScheduleTeamDto  } from './dto/create-team.dto/create-team.dto';
 import { Team } from './entities/team.entity';
 import { PaginateTeamDto } from './dto/paginate-team.dto/paginate-team.dto';
 import { PatchTeamDto } from './dto/patch-team.dto/patch-team.dto';
 import { DeleteTeamDto } from './dto/delete-team.dto/delete-team.dto';
-import { GetIdTeamDto } from './dto/id-team.dto/id-team.dtp';
+import { GetIdTeamDto, GetIdTeamServiceDto } from './dto/id-team.dto/id-team.dtp';
 
 
 export interface PaginatedTeam {
@@ -47,7 +47,7 @@ export class TeamService {
 
     ){}
 
-    async CreateTeam(dto: CreateTeamDto): Promise<Team> {
+    async CreateTeam(dto: CreateScheduleTeamDto ): Promise<Team> {
         const team = this.teamRepository.create({
             name: dto.name,
             description: dto.description,
@@ -55,100 +55,131 @@ export class TeamService {
             week_count: dto.weekCount ?? 0,
             hours_perWeek_count: dto.hoursPerWeekCount ?? 0,
             hours_perWeek_practice_count: dto.hoursPerWeekPracticeCount ?? 0,
-        })
+            quarter: dto.quarter ?? '',
+            lecture_hours: dto.lectureHours ?? 0,
+            practice_type: dto.practiceType ?? '',
+            teacher_lecture: dto.teacherLecture ?? '',
+            teacher_practice: dto.teacherPractice ?? '',
+            placed_hours: dto.placedHours ?? 0,
+        });
 
         if (dto.orderIds?.length) {
             const orders = await this.orderRepository.find({
                 where: { id: In(dto.orderIds) },
-            })
-
+            });
             if (orders.length !== dto.orderIds.length) {
-                throw new NotFoundException('One or more orders not found')
+                throw new NotFoundException('One or more orders not found');
             }
+            team.orders = orders;
+        }
+
+        if (dto.practiceOrderIds?.length) {
+            const practiceOrders = await this.orderRepository.find({
+                where: { id: In(dto.practiceOrderIds) },
+            });
+            if (practiceOrders.length !== dto.practiceOrderIds.length) {
+                throw new NotFoundException('One or more practice orders not found');
+            }
+            team.practiceOrders = practiceOrders;
         }
 
         if (dto.eventsIds?.length) {
-            const event = await this.eventRepository.find({
+            const events = await this.eventRepository.find({
                 where: { id: In(dto.eventsIds) },
-            })
-
-            if (event.length !== dto.eventsIds.length) {
-                throw new NotFoundException('One or more events not found')
+            });
+            if (events.length !== dto.eventsIds.length) {
+                throw new NotFoundException('One or more events not found');
             }
+            team.events = events;
         }
 
         if (dto.memberIds?.length) {
-            const member = await this.memberRepository.find({
+            const members = await this.memberRepository.find({
                 where: { id: In(dto.memberIds) },
-            })
-
-            if (member.length !== dto.memberIds.length) {
-                throw new NotFoundException('One or more members not found')
+            });
+            if (members.length !== dto.memberIds.length) {
+                throw new NotFoundException('One or more members not found');
             }
+            team.members = members;
         }
 
         return this.teamRepository.save(team);
-
     }
 
-    async GetByIdTeam(dto: GetIdTeamDto): Promise<Team> {
-        const { id, includeEvents, includeOrders, includeMembers } = dto;
+    async GetByIdTeam(dto: GetIdTeamServiceDto): Promise<Team> {
+        const { id, includeEvents, includeOrders, includeMembers } = dto; 
 
         const relations: string[] = [];
 
-        if (includeEvents) {
-            relations.push('events');
-        }
-
-        if (includeMembers) {
-            relations.push('members');
-        }
-
-        if (includeOrders) {
-            relations.push('orders');
-        }
+        if (includeEvents) relations.push('events');
+        if (includeMembers) relations.push('members');
+        if (includeOrders) relations.push('orders');
 
         const team = await this.teamRepository.findOne({
-            where: { id },
+            where: { id: dto.id },
             relations,
         });
 
         if (!team) {
-            throw new NotFoundException(`Team with ID ${id} not found`);
+            throw new NotFoundException(`Team with ID ${id} not found`); 
         }
 
         return team;
     }
 
-    
-
-     async PatchTeam(id: string, dto: PatchTeamDto): Promise<Team> {
-    
-            const team = await this.teamRepository.findOne({
-                where: { id },
-            });
-            if (!team) {
-                throw new NotFoundException(`Team with ID ${id} not found`);
-            }
-    
-            if (dto.name !== undefined) {
-                team.name = dto.name;
-            }
-            if (dto.description !== undefined) {
-                team.description = dto.description;
-            }
-            if (dto.eventsIds !== undefined) {
-                const events = await this.eventRepository.findByIds(dto.eventsIds);
-                team.events = events;
-            }
-            
-            if (dto.orderIds !== undefined) {
-                const orders = await this.orderRepository.findByIds(dto.orderIds);
-                team.orders = orders;
-            }
-    
-            return await this.teamRepository.save(team);
+    async PatchTeam(id: string, dto: PatchTeamDto): Promise<Team> {
+        const team = await this.teamRepository.findOne({
+            where: { id },
+        });
+        if (!team) {
+            throw new NotFoundException(`Team with ID ${id} not found`);
         }
+
+        // простые поля
+        if (dto.name !== undefined) team.name = dto.name;
+        if (dto.description !== undefined) team.description = dto.description;
+        if (dto.studentCount !== undefined) team.student_count = dto.studentCount;
+        if (dto.weekCount !== undefined) team.week_count = dto.weekCount;
+        if (dto.hoursPerWeekCount !== undefined) team.hours_perWeek_count = dto.hoursPerWeekCount;
+        if (dto.hoursPerWeekPracticeCount !== undefined) team.hours_perWeek_practice_count = dto.hoursPerWeekPracticeCount;
+        if (dto.quarter !== undefined) team.quarter = dto.quarter;
+        if (dto.lectureHours !== undefined) team.lecture_hours = dto.lectureHours;
+        if (dto.practiceType !== undefined) team.practice_type = dto.practiceType;
+        if (dto.teacherLecture !== undefined) team.teacher_lecture = dto.teacherLecture;
+        if (dto.teacherPractice !== undefined) team.teacher_practice = dto.teacherPractice;
+        if (dto.placedHours !== undefined) team.placed_hours = dto.placedHours;
+
+        // связи
+        if (dto.orderIds !== undefined) {
+            const orders = await this.orderRepository.find({
+                where: { id: In(dto.orderIds) },
+            });
+            team.orders = orders;
+        }
+
+        if (dto.practiceOrderIds !== undefined) {
+            const practiceOrders = await this.orderRepository.find({
+                where: { id: In(dto.practiceOrderIds) },
+            });
+            team.practiceOrders = practiceOrders;
+        }
+
+        if (dto.eventsIds !== undefined) {
+            const events = await this.eventRepository.find({
+                where: { id: In(dto.eventsIds) },
+            });
+            team.events = events;
+        }
+
+        if (dto.memberIds !== undefined) {
+            const members = await this.memberRepository.find({
+                where: { id: In(dto.memberIds) },
+            });
+            team.members = members;
+        }
+
+        return this.teamRepository.save(team);
+    }
 
     async PaginateTeam(dto: PaginateTeamDto): Promise<PaginatedTeam> {
             const { page, limit, includeOrders = false, includeMembers = false, includeEvents = false  } = dto;

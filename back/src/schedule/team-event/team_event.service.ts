@@ -7,12 +7,12 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
 import { Event } from './entities/team_event.entity';
 import { Team } from '../team/entities/team.entity';
-import { CreateEventDto } from './dto/create-event.dto/create-event.dto';
+import { Order } from '../order/entities/order.entity';
+import { CreateScheduleEventDto } from './dto/create-event.dto/create-event.dto';
 import { PaginateEventDto } from './dto/paginate-event.dto/paginate-event.dto';
 import { PatchEventDto } from './dto/patch-event.dto/patch-event.dto';
 import { DeleteEventDto } from './dto/delete-event.dto/delete-event.dto';
 import { GetIdEventDto } from './dto/id-event.dto/id-event.dtp';
-import { DayOfWeek } from './dto/create-event.dto/create-event.dto';
 
 export interface PaginatedEvent {
   data: Event[];
@@ -34,45 +34,40 @@ export class TeamEventService {
 
         @InjectRepository(Team)
         private readonly teamRepository: Repository<Team>,
+
+        @InjectRepository(Order)
+        private readonly orderRepository: Repository<Order>,
     ){}
 
-    async CreateEvent(dto: CreateEventDto): Promise<Event> {
-
-        const now = new Date();
-        if (dto.startDateTime && dto.startDateTime < now) {
-            throw new BadRequestException('Дата начала события не может быть в прошлом');
-        }
-        if (dto.startDateTime && dto.endDateTime && dto.endDateTime <= dto.startDateTime) {
-            throw new BadRequestException('Дата окончания должна быть позже даты начала');
-        }
-        if (dto.type === 'recurring') {
-            if (dto.startDateRange && dto.endDateRange && dto.endDateRange <= dto.startDateRange) {
-                throw new BadRequestException('Конец диапазона повторения должен быть позже начала');
-            }
-        }
-
+    async CreateEvent(dto: CreateScheduleEventDto): Promise<Event> {
         const event = this.eventRepository.create({
-            subject: dto.subject,
-            content: dto.content,
-            startDateTime: dto.startDateTime,
-            endDateTime: dto.endDateTime,
+            subject:        dto.subject,
+            content:        dto.content,
+            startTime:      dto.startTime,
+            endTime:        dto.endTime,
             startDateRange: dto.startDateRange,
-            endDateRange: dto.endDateRange,
-            type: dto.type,
-            interval: dto.interval,
-            daysOfWeek: dto.daysOfWeek,
+            endDateRange:   dto.endDateRange,
+            type:           dto.type,
+            interval:       dto.interval,
+            daysOfWeek:     dto.daysOfWeek,
         });
 
-        if (dto.teamIds?.length) {
-            const teams = await this.teamRepository.find({
-                where: { id: In(dto.teamIds) },
-            });
+        // Одна команда — ManyToOne
+        if (dto.teamId) {
+            const team = await this.teamRepository.findOne({ where: { id: dto.teamId } });
+            if (!team) throw new NotFoundException(`Team ${dto.teamId} not found`);
+            event.team = team;
+        }
 
-            if (teams.length !== dto.teamIds.length) {
-                throw new NotFoundException('Одна или несколько команд не найдены');
+        // Ордери — ManyToMany, залишається як було
+        if (dto.orderIds?.length) {
+            const orders = await this.orderRepository.find({
+                where: { id: In(dto.orderIds) },
+            });
+            if (orders.length !== dto.orderIds.length) {
+                throw new NotFoundException('One or more orders not found');
             }
-            
-            event.teams = teams;
+            event.orders = orders;
         }
 
         return this.eventRepository.save(event);
@@ -82,9 +77,8 @@ export class TeamEventService {
         const { id, includeTeams } = dto;
 
         const relations: string[] = [];
-
         if (includeTeams) {
-            relations.push('teams');
+            relations.push('team'); // було 'teams'
         }
 
         const event = await this.eventRepository.findOne({
@@ -103,63 +97,60 @@ export class TeamEventService {
         const event = await this.eventRepository.findOne({
             where: { id },
         });
-        
+
         if (!event) {
             throw new NotFoundException(`Event with ID ${id} not found`);
         }
 
-        if (dto.startDateTime !== undefined) {
-            const endDateTimeToCheck = dto.endDateTime !== undefined ? dto.endDateTime : event.endDateTime;
-            if (endDateTimeToCheck && dto.startDateTime >= endDateTimeToCheck) {
-                throw new BadRequestException('The new date must be before the end date.');
+        if (dto.startTime !== undefined && dto.endTime !== undefined) {
+            if (dto.endTime <= dto.startTime) {
+                throw new BadRequestException('endTime must be later than startTime');
             }
         }
 
-        if (dto.endDateTime !== undefined) {
-            const startDateTimeToCheck = dto.startDateTime !== undefined ? dto.startDateTime : event.startDateTime;
-            if (startDateTimeToCheck && dto.endDateTime <= startDateTimeToCheck) {
-                throw new BadRequestException('The new end date must be later than the start date.');
-            }
-        }
-
-        if (dto.subject !== undefined) event.subject = dto.subject;
-        if (dto.content !== undefined) event.content = dto.content;
-        if (dto.startDateTime !== undefined) event.startDateTime = dto.startDateTime;
-        if (dto.endDateTime !== undefined) event.endDateTime = dto.endDateTime;
+        if (dto.subject !== undefined)        event.subject        = dto.subject;
+        if (dto.content !== undefined)        event.content        = dto.content;
+        if (dto.startTime !== undefined)      event.startTime      = dto.startTime;
+        if (dto.endTime !== undefined)        event.endTime        = dto.endTime;
         if (dto.startDateRange !== undefined) event.startDateRange = dto.startDateRange;
-        if (dto.endDateRange !== undefined) event.endDateRange = dto.endDateRange;
-        if (dto.type !== undefined) event.type = dto.type;
-        if (dto.interval !== undefined) event.interval = dto.interval;
-        if (dto.daysOfWeek !== undefined) event.daysOfWeek = dto.daysOfWeek;
+        if (dto.endDateRange !== undefined)   event.endDateRange   = dto.endDateRange;
+        if (dto.type !== undefined)           event.type           = dto.type;
+        if (dto.interval !== undefined)       event.interval       = dto.interval;
+        if (dto.daysOfWeek !== undefined)     event.daysOfWeek     = dto.daysOfWeek;
 
-        if (dto.teamIds !== undefined) {
-            const teams = await this.teamRepository.find({
-                where: { id: In(dto.teamIds) }
+        // Одна команда — ManyToOne
+        if (dto.teamId !== undefined) {
+            const team = await this.teamRepository.findOne({ where: { id: dto.teamId } });
+            if (!team) throw new NotFoundException(`Team ${dto.teamId} not found`);
+            event.team = team;
+        }
+
+        // Ордери — ManyToMany, залишається як було
+        if (dto.orderIds !== undefined) {
+            const orders = await this.orderRepository.find({
+                where: { id: In(dto.orderIds) },
             });
-            
-            if (teams.length !== dto.teamIds.length) {
-                throw new NotFoundException('One or more teams not found');
+            if (orders.length !== dto.orderIds.length) {
+                throw new NotFoundException('One or more orders not found');
             }
-            
-            event.teams = teams;
+            event.orders = orders;
         }
 
         return await this.eventRepository.save(event);
     }
 
     async PaginateEvent(dto: PaginateEventDto): Promise<PaginatedEvent> {
-        const { page, limit, includeTeams = false } = dto;
-        
+        const { page, limit, includeTeams = false, includeOrders = false } = dto;
+
         const relations: string[] = [];
-        if (includeTeams) {
-            relations.push('teams');
-        }
-        
+        if (includeTeams)  relations.push('team');   // було 'teams'
+        if (includeOrders) relations.push('orders');
+
         const [data, total] = await this.eventRepository.findAndCount({
             skip: (page - 1) * limit,
             take: limit,
             relations,
-            order: { startDateTime: 'ASC' },
+            order: { startTime: 'ASC' },
         });
 
         const totalPages = Math.ceil(total / limit);
@@ -181,16 +172,16 @@ export class TeamEventService {
 
     async DeleteEvent(id: string): Promise<{ message: string }> {
         const event = await this.eventRepository.findOne({
-            where: { id }
+            where: { id },
         });
-        
+
         if (!event) {
             throw new NotFoundException(`Event with ID ${id} not found`);
         }
-        
+
         await this.eventRepository.remove(event);
-        return { 
-            message: `Event '${event.subject}' (ID: ${id}) deleted successfully` 
+        return {
+            message: `Event '${event.subject}' (ID: ${id}) deleted successfully`,
         };
     }
 
@@ -199,22 +190,24 @@ export class TeamEventService {
         deletedCount: number 
     }> {
         const { eventIds, softDelete = false } = dto;
-        
+
         if (!eventIds || eventIds.length === 0) {
             throw new BadRequestException('No IDs provided for deletion');
         }
-        
+
         const queryBuilder = this.eventRepository.createQueryBuilder('event');
-        
+
         if (softDelete) {
             await queryBuilder
                 .softDelete()
-                .where('event.id IN (:...ids)', { ids: eventIds })
+                .from(Event)
+                .where('id IN (:...ids)', { ids: eventIds }) // ← убрать 'event.'
                 .execute();
         } else {
             await queryBuilder
                 .delete()
-                .where('event.id IN (:...ids)', { ids: eventIds })
+                .from(Event)
+                .where('id IN (:...ids)', { ids: eventIds }) // ← убрать 'event.'
                 .execute();
         }
 
@@ -223,13 +216,13 @@ export class TeamEventService {
             .select('COUNT(*)', 'count')
             .where('id IN (:...ids)', { ids: eventIds })
             .getRawOne();
-        
+
         const remainingCount = parseInt(countResult.count);
         const deletedCount = eventIds.length - remainingCount;
-        
-        return { 
+
+        return {
             message: `Deleted ${deletedCount} of ${eventIds.length} requested events`,
-            deletedCount
+            deletedCount,
         };
     }
 }

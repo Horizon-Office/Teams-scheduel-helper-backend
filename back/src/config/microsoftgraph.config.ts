@@ -7,12 +7,14 @@ export default registerAs('microsoftGraph', () => {
         client_id: Joi.string().required(),
         client_secret: Joi.string().required(),
         tenant_id: Joi.string().required(),
+        scope:  Joi.string().required(),
       });
     
       const values = {
-        client_id: process.env.CLIENT_ID,
-        client_secret: process.env.CLIENT_SECRET,
-        tenant_id: process.env.TENANT_ID,
+        client_id: process.env.MICROSOFT_CLIENT_ID,
+        client_secret: process.env.MICROSOFT_CLIENT_SECRET,
+        tenant_id: process.env.MICROSOFT_TENANT_ID,
+        scope: process.env.MICROSOFT_SCOPE,
       };
     
       const { error, value } = schema.validate(values, {
@@ -29,5 +31,6 @@ export default registerAs('microsoftGraph', () => {
         client_id: value.client_id,
         client_secret: value.client_secret,
         tenant_id: value.tenant_id,
+        scope: value.scope
       };
 });

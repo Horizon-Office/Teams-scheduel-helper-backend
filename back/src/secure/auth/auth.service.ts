@@ -5,7 +5,7 @@ import {
 } from '@nestjs/common';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
-import { GraphUserResponse, MicrosoftGraphClientService } from 'src/client/microsoft_graph/microsoft_graph.service';
+import { GraphUserResponse, MicrosoftGraphSecurityClientService } from 'src/client/microsoft_graph/microsoft_graph_security.service';
 import { ref } from  'process';
 import { response } from 'express';
 import { access } from 'fs';
@@ -34,7 +34,7 @@ export interface validateAccessTokenResponse {
 @Injectable()
 export class AuthService {
     constructor(
-        private readonly microsoftGraphClient: MicrosoftGraphClientService,
+        private readonly microsoftGraphClient: MicrosoftGraphSecurityClientService,
         @Inject(CACHE_MANAGER) private cacheManager: Cache,
     ) {}
     

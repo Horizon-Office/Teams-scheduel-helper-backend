@@ -22,17 +22,17 @@ export class PaginateTeamDto {
   @IsOptional()
   @IsBoolean()
   @Type(() => Boolean)
-  includeMembers?: boolean = true;
+  includeMembers?: boolean = false;
 
   @ApiPropertyOptional({ example: true, default: true })
   @IsOptional()
   @IsBoolean()
   @Type(() => Boolean)
-  includeOrders?: boolean = true;
+  includeOrders?: boolean = false;
 
   @ApiPropertyOptional({ example: true, default: true })
   @IsOptional()
   @IsBoolean()
   @Type(() => Boolean)
-  includeEvents?: boolean = true;
+  includeEvents?: boolean = false;
 }

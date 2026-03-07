@@ -10,7 +10,7 @@ import {
 import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
-export class CreateTeamDto {
+export class CreateScheduleTeamDto  {
   @ApiProperty({ example: 'Backend Team', description: 'Назва команди' })
   @IsNotEmpty()
   @IsString()
@@ -49,6 +49,40 @@ export class CreateTeamDto {
   @Min(0)
   hoursPerWeekPracticeCount?: number;
 
+  @ApiPropertyOptional({ example: '1 , 2', description: 'Квартал: "1", "2", або "1 , 2"' })
+  @IsOptional()
+  @IsString()
+  quarter?: string;
+
+  @ApiPropertyOptional({ example: 2, description: 'Години лекцій' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  lectureHours?: number;
+
+  @ApiPropertyOptional({ example: 'лаб', description: 'Тип практики: "лаб", "пр.р" або ""' })
+  @IsOptional()
+  @IsString()
+  practiceType?: string;
+
+  @ApiPropertyOptional({ example: 'Сафаров О.О., доцент', description: 'Викладач лекцій' })
+  @IsOptional()
+  @IsString()
+  teacherLecture?: string;
+
+  @ApiPropertyOptional({ example: 'Сафаров О.О., доцент', description: 'Викладач практики' })
+  @IsOptional()
+  @IsString()
+  teacherPractice?: string;
+
+  @ApiPropertyOptional({ example: 0, description: 'Розміщені години' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  placedHours?: number;
+
   @ApiPropertyOptional({
     example: ['550e8400-e29b-41d4-a716-446655440000'],
     type: [String],
@@ -70,6 +104,17 @@ export class CreateTeamDto {
   @IsUUID('4', { each: true })
   @Type(() => String)
   orderIds?: string[];
+
+  @ApiPropertyOptional({
+    example: ['550e8400-e29b-41d4-a716-446655440001'],
+    type: [String],
+    description: 'UUID практичних ордерів/підгруп',
+  })
+  @IsOptional()
+  @IsArray()
+  @IsUUID('4', { each: true })
+  @Type(() => String)
+  practiceOrderIds?: string[];
 
   @ApiPropertyOptional({
     example: ['550e8400-e29b-41d4-a716-446655440002'],

@@ -10,6 +10,7 @@ import { Repository, In, SelectQueryBuilder } from 'typeorm';
 import { Order } from './entities/order.entity';
 import { Team } from '../../schedule/team/entities/team.entity';
 import { Faculty } from '../../schedule/faculty/entities/faculty.entity';
+import { Event } from '../team-event/entities/team_event.entity';
 
 import { CreateOrderDto } from './dto/create-order.dto/create-order.dto';
 import { GetIdOrderDto } from './dto/id-order.dto/id-order.dto';
@@ -41,6 +42,9 @@ export class OrderService {
 
         @InjectRepository(Team)
         private readonly teamRepository: Repository<Team>,
+
+        @InjectRepository(Event)
+        private readonly eventRepository: Repository<Event>, 
     ) {}
 
    async CreateOrder(dto: CreateOrderDto): Promise<Order> {
@@ -60,6 +64,7 @@ export class OrderService {
             
             order.faculty = faculty;
         }
+
         if (dto.teamIds?.length) {
             const teams = await this.teamRepository.find({
                 where: { id: In(dto.teamIds) },
@@ -72,11 +77,21 @@ export class OrderService {
             order.teams = teams;
         }
 
+        if (dto.eventIds?.length) {
+            const events = await this.eventRepository.find({
+                where: { id: In(dto.eventIds) },
+            });
+            if (events.length !== dto.eventIds.length) {
+                throw new NotFoundException('One or more events not found');
+            }
+            order.events = events;
+        }
+
         return this.orderRepository.save(order);
     }
 
     async PaginateOrder(dto: PaginateOrderDto): Promise<PaginatedOrders> {
-        const { page, limit, facultyId, search, includeTeams = false } = dto;
+        const { page, limit, facultyId, search, includeTeams = false, includeEvents = false } = dto;
         
         const queryBuilder = this.orderRepository.createQueryBuilder('order');
         this.applyFilters(queryBuilder, facultyId, search);
@@ -85,6 +100,9 @@ export class OrderService {
             queryBuilder.leftJoinAndSelect('order.teams', 'teams');
         }
         
+        if (includeEvents) {
+            queryBuilder.leftJoinAndSelect('order.events', 'events');
+        }
         queryBuilder.orderBy('order.name', 'ASC');
         
         const [data, total] = await queryBuilder
@@ -141,16 +159,17 @@ export class OrderService {
     }
 
     async GetByIdOrder(dto: GetIdOrderDto): Promise<Order> {
-        const { id, includeTeams } = dto;
+        const { id, includeTeams, includeEvents } = dto; 
+    
+        const relations: string[] = [];
+        if (includeTeams) relations.push('teams');
+        if (includeEvents) relations.push('events'); 
         
-        const queryOptions: any = {
-            where: { id }
-        };
-        if (includeTeams) {
-            queryOptions.relations = ['teams'];
-        }
-        
-        const order = await this.orderRepository.findOne(queryOptions);
+        const order = await this.orderRepository.findOne({
+            where: { id },
+            relations
+        });
+
         
         if (!order) {
             throw new NotFoundException(`Order with ID ${id} not found`);
@@ -158,11 +177,24 @@ export class OrderService {
         return order;
     }
 
+    async GetOrderTeams(orderId: string): Promise<Team[]> {
+    const order = await this.orderRepository.findOne({
+        where: { id: orderId },
+        relations: ['teams'],
+    });
+
+    if (!order) {
+        throw new NotFoundException(`Order with ID ${orderId} not found`);
+    }
+
+    return order.teams;
+}
+
 
     async PatchOrder(id: string, dto: PatchOrderDto): Promise<Order> {
         const order = await this.orderRepository.findOne({
             where: { id },
-            relations: ['faculty', 'teams'] // ДОДАЄМО relations!
+            relations: ['faculty', 'teams', 'events'] 
         });
         
         if (!order) {
@@ -192,6 +224,13 @@ export class OrderService {
         if (dto.teamIds !== undefined) {
             const teams = await this.teamRepository.findByIds(dto.teamIds);
             order.teams = teams;
+        }
+
+        if (dto.eventIds !== undefined) {
+            const events = await this.eventRepository.find({
+                where: { id: In(dto.eventIds) },
+            });
+            order.events = events;
         }
 
         return await this.orderRepository.save(order);

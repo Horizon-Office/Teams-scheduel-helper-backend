@@ -31,12 +31,14 @@ export interface GraphUserResponse {
 }
 
 @Injectable()
-export class MicrosoftGraphClientService {
+export class MicrosoftGraphSecurityClientService {
   private readonly clientId: string;
   private readonly clientSecret: string;
   private readonly tenantId: string;
 
+
   constructor(private readonly configService: ConfigService) {
+
     const config = this.configService.get('microsoftGraph');
     this.clientId = config.client_id;
     this.clientSecret = config.client_secret;
@@ -45,14 +47,15 @@ export class MicrosoftGraphClientService {
     console.log('MicrosoftGraph service initialized');
   }
 
+
   /**
-  * Получение токена делегирования по authorization code
-  * @param authCode Код авторизации, полученный из callback
-  * @param scope Запрашиваемые области доступа
-  * @param redirect_uri URI перенаправления, зарегистрированный в приложении
-  * @returns Ответ с токеном доступа
-  */
-  async getDelegateToken(authCode: string, scope: string, redirect_uri: string): Promise<TokenResponse> {
+   * Obtain a delegation token using an authorization code
+   * @param authCode Authorization code received from the callback
+   * @param scope Requested access scopes
+   * @param redirect_uri Redirect URI registered in the application
+   * @returns Access token response or Graph API error response
+   */
+  async getDelegateToken(authCode: string, scope: string, redirect_uri: string): Promise<TokenResponse | any> {
     const url = `https://login.microsoftonline.com/${this.tenantId}/oauth2/v2.0/token`;
 
     const requestBody = new URLSearchParams({
@@ -70,10 +73,16 @@ export class MicrosoftGraphClientService {
       },
     };
 
-    const response = await axios.post<TokenResponse>(url, requestBody, requestConfig);
-    return response.data;
+    try {
+      const response = await axios.post<TokenResponse>(url, requestBody, requestConfig);
+      return response.data;
+    } catch (error: any) {
+      if (error.response) {
+        return error.response.data;
+      }
+      throw error;
+    }
   }
-
   
   /**
   * Delegate token refresh
@@ -81,40 +90,39 @@ export class MicrosoftGraphClientService {
   * @param scope requested access scopes
   * @returns response with access token
   */
-
   async refreshDelegateToken(
-  refresh_token: string,
-  scope: string
-): Promise<TokenRefresh> {
-  const url = `https://login.microsoftonline.com/${this.tenantId}/oauth2/v2.0/token`;
+    refresh_token: string,
+    scope: string
+  ): Promise<TokenRefresh> {
+    const url = `https://login.microsoftonline.com/${this.tenantId}/oauth2/v2.0/token`;
 
-  const body = new URLSearchParams({
-    client_id: this.clientId,
-    client_secret: this.clientSecret,
-    grant_type: 'refresh_token',
-    refresh_token,
-    scope,
-  }).toString();
+    const body = new URLSearchParams({
+      client_id: this.clientId,
+      client_secret: this.clientSecret,
+      grant_type: 'refresh_token',
+      refresh_token,
+      scope,
+    }).toString();
 
-    const response = await axios.post<TokenRefresh>(
-      url,
-      body,
-      {
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'Authorization': '' 
-        },
-      }
-    );
+      const response = await axios.post<TokenRefresh>(
+        url,
+        body,
+        {
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Authorization': '' 
+          },
+        }
+      );
 
-    return response.data;
+      return response.data;
 
-}
+  }
 
   /**
-  * Получение информации о текущем пользователе по делегатному токену
-  * @param accessToken Делегатный токен пользователя
-  * @returns Информация о пользователе
+  * Get information about the current user using a delegation token
+  * @param accessToken User's delegation token
+  * @returns User information
   */
   async getUserInfo(accessToken: string): Promise<GraphUserResponse> {
   const url = 'https://graph.microsoft.com/v1.0/me';
@@ -126,6 +134,7 @@ export class MicrosoftGraphClientService {
   });
 
   return response.data;
+  
   }
 
 }

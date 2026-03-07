@@ -4,7 +4,7 @@ import { MicrosoftGraphClientModule } from './microsoft_graph/microsoft_graph.mo
 
 @Module({
   imports: [
-    MicrosoftGraphClientModule
+    MicrosoftGraphClientModule,
   ],
 })
 export class ClientModule {}

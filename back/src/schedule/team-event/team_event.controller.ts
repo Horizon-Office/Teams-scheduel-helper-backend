@@ -13,7 +13,7 @@ import {
     Body,
  } from '@nestjs/common';
 import { TeamEventService } from './team_event.service';
-import { CreateEventDto } from './dto/create-event.dto/create-event.dto';
+import { CreateScheduleEventDto  } from './dto/create-event.dto/create-event.dto';
 import { PaginateEventDto } from './dto/paginate-event.dto/paginate-event.dto';
 import { PatchEventDto } from './dto/patch-event.dto/patch-event.dto';
 import { DeleteEventDto } from './dto/delete-event.dto/delete-event.dto';
@@ -54,7 +54,7 @@ export class TeamEventController {
     }
 
     @Post()
-    async createEvent(@Body() eventDto: CreateEventDto) {
+    async createEvent(@Body() eventDto: CreateScheduleEventDto ) {
         try {
             return await this.eventService.CreateEvent(eventDto);
         } catch (error) {
@@ -95,10 +95,11 @@ export class TeamEventController {
             }
         }
     
-    @Delete('batch')
-    async deleteMultipleEvents(@Body() deleteEventDto: DeleteEventDto) {
+        
+    @Delete()
+    async deleteMultipleEvents(@Body() dto: DeleteEventDto) {
         try {
-            return await this.eventService.DeleteMultipleEvents(deleteEventDto);
+            return await this.eventService.DeleteMultipleEvents(dto);
         } catch (error) {
             throw new BadRequestException({
                 statusCode: HttpStatus.BAD_REQUEST,

@@ -12,5 +12,11 @@ export class GetIdOrderDto {
   @IsOptional()
   @IsBoolean()
   @Type(() => Boolean)
-  includeTeams?: boolean = true;
+  includeTeams?: boolean = false;
+
+  @ApiPropertyOptional({ example: true, default: true })
+  @IsOptional()
+  @IsBoolean()
+  @Type(() => Boolean)
+  includeEvents?: boolean = true;
 }

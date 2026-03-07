@@ -20,6 +20,7 @@ import { error } from 'console';
 import { PatchOrderDto } from './dto/patch-order.dto/patch-order.dto';
 import { DeleteOrderDto } from './dto/delete-order.dto/delete-order.dto';
 import { GetIdOrderDto } from './dto/id-order.dto/id-order.dto';
+import { Team } from '../team/entities/team.entity';
 
 @Controller('order')
 export class OrderController {
@@ -53,6 +54,11 @@ export class OrderController {
                 error: "Bad request"
             });
         }
+    }
+
+    @Get(':id/teams')
+    async getOrderTeams(@Param('id') id: string): Promise<Team[]> {
+        return this.orderService.GetOrderTeams(id);
     }
 
     @Post() 

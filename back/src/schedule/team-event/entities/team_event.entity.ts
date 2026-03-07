@@ -3,8 +3,11 @@ import {
   PrimaryGeneratedColumn,
   Column,
   ManyToMany,
+  ManyToOne,
+  JoinColumn,
 } from 'typeorm';
 import { Team } from '../../team/entities/team.entity';
+import { Order } from 'src/schedule/order/entities/order.entity';
 
 @Entity('events')
 export class Event {
@@ -17,27 +20,32 @@ export class Event {
   @Column('text')
   content: string;
 
-  @Column({ type: 'timestamptz' })
-  startDateTime: Date;
+  @Column({ type: 'time', nullable: true })
+  startTime: string | null;
 
-  @Column({ type: 'timestamptz' })
-  endDateTime: Date;
+  @Column({ type: 'time', nullable: true })
+  endTime: string | null;
 
-  @Column({ type: 'date' })
-  startDateRange: Date;
+  @Column({ type: 'date', nullable: true })
+  startDateRange: string | null;
 
-  @Column({ type: 'date' })
-  endDateRange: Date;
+  @Column({ type: 'date', nullable: true })
+  endDateRange: string | null;
 
-  @Column()
-  type: string;
+  @Column({ type: 'varchar', nullable: true })
+  type: string | null;
 
-  @Column('int')
-  interval: number;
+  @Column({ type: 'int', nullable: true })
+  interval: number | null;
 
-  @Column('simple-array')
-  daysOfWeek: string[];
+  @Column({ type: 'simple-array', nullable: true })
+  daysOfWeek: string[] | null;
 
-  @ManyToMany(() => Team, (team) => team.events)
-  teams: Team[];
+
+  @ManyToOne(() => Team, (team) => team.events, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'team_id' })
+  team: Team;
+
+  @ManyToMany(() => Order, (order) => order.events)
+  orders: Order[];
 }

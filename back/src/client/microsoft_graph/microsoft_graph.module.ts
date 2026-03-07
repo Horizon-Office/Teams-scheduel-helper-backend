@@ -1,10 +1,10 @@
 import { Module } from '@nestjs/common';
-import { MicrosoftGraphClientService } from './microsoft_graph.service';
+import { MicrosoftGraphSecurityClientService } from './microsoft_graph_security.service';
 
 
 @Module({
-  providers: [MicrosoftGraphClientService],
-  exports: [MicrosoftGraphClientService],
+  providers: [MicrosoftGraphSecurityClientService],
+  exports: [MicrosoftGraphSecurityClientService],
 })
 
 export class MicrosoftGraphClientModule {}

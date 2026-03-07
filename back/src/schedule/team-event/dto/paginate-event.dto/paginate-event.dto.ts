@@ -23,4 +23,10 @@ export class PaginateEventDto {
   @IsBoolean()
   @Type(() => Boolean)
   includeTeams?: boolean = false;
+
+  @ApiPropertyOptional({ example: false, default: false })
+  @IsOptional()
+  @IsBoolean()
+  @Type(() => Boolean)
+  includeOrders?: boolean = false;
 }

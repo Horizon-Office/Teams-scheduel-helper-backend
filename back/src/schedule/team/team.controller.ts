@@ -13,27 +13,29 @@ import {
     Body,
  } from '@nestjs/common';
 import { TeamService } from './team.service';
-import { CreateTeamDto } from './dto/create-team.dto/create-team.dto';
+import { CreateScheduleTeamDto  } from './dto/create-team.dto/create-team.dto';
 import { PaginateTeamDto } from './dto/paginate-team.dto/paginate-team.dto';
 import { PatchTeamDto } from './dto/patch-team.dto/patch-team.dto';
 import { DeleteTeamDto } from './dto/delete-team.dto/delete-team.dto';
-import { GetIdTeamDto } from './dto/id-team.dto/id-team.dtp';
+import { GetIdTeamDto, GetIdTeamServiceDto } from './dto/id-team.dto/id-team.dtp';
 
 @Controller('team')
 export class TeamController {
     constructor(private readonly teamService: TeamService) {}
 
-    @Get()
-    async getByIdTeam( 
-        @Query() query: GetIdTeamDto,
+    @Get(':id')
+    async getByIdTeam(
+        @Param('id') id: string,
+        @Body() body: GetIdTeamDto,
     ) {
-        try { 
-            return await this.teamService.GetByIdTeam(query);
+        try {
+            const dto: GetIdTeamServiceDto = { ...body, id }; 
+            return await this.teamService.GetByIdTeam(dto);
         } catch (error) {
             throw new BadRequestException({
                 statusCode: HttpStatus.BAD_REQUEST,
                 message: `Team by id failed: ${error.message}`,
-                error: "Bad request"
+                error: 'Bad request',
             });
         }
     }
@@ -54,7 +56,7 @@ export class TeamController {
     }
 
     @Post()
-    async createTeam(@Body() teamDto: CreateTeamDto) {
+    async createTeam(@Body() teamDto: CreateScheduleTeamDto ) {
         try {
             return await this.teamService.CreateTeam(teamDto);
         } catch (error) {
