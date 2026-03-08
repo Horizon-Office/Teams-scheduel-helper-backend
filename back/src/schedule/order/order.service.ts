@@ -178,17 +178,17 @@ export class OrderService {
     }
 
     async GetOrderTeams(orderId: string): Promise<Team[]> {
-    const order = await this.orderRepository.findOne({
-        where: { id: orderId },
-        relations: ['teams'],
-    });
+        const order = await this.orderRepository.findOne({
+            where: { id: orderId },
+            relations: ['teams'],
+        });
 
-    if (!order) {
-        throw new NotFoundException(`Order with ID ${orderId} not found`);
+        if (!order) {
+            throw new NotFoundException(`Order with ID ${orderId} not found`);
+        }
+
+        return order.teams;
     }
-
-    return order.teams;
-}
 
 
     async PatchOrder(id: string, dto: PatchOrderDto): Promise<Order> {
