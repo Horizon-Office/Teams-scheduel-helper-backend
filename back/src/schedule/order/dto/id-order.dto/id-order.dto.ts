@@ -1,22 +1,17 @@
-import { IsBoolean, IsOptional, IsUUID } from 'class-validator';
-import { Type } from 'class-transformer';
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { IsBoolean, IsOptional } from 'class-validator';
+import { Transform } from 'class-transformer';
+import { ApiPropertyOptional } from '@nestjs/swagger';
 
 export class GetIdOrderDto {
-
-  @ApiProperty({ example: '550e8400-e29b-41d4-a716-446655440000' })
-  @IsUUID('4')
-  id: string;
-
-  @ApiPropertyOptional({ example: true, default: true })
+  @ApiPropertyOptional({ example: true, default: false })
   @IsOptional()
   @IsBoolean()
-  @Type(() => Boolean)
+  @Transform(({ value }) => value === 'true' || value === true)
   includeTeams?: boolean = false;
 
-  @ApiPropertyOptional({ example: true, default: true })
+  @ApiPropertyOptional({ example: true, default: false })
   @IsOptional()
   @IsBoolean()
-  @Type(() => Boolean)
-  includeEvents?: boolean = true;
+  @Transform(({ value }) => value === 'true' || value === true)
+  includeEvents?: boolean = false;
 }

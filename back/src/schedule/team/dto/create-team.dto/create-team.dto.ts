@@ -84,6 +84,28 @@ export class CreateScheduleTeamDto  {
   placedHours?: number;
 
   @ApiPropertyOptional({
+  example: ['ІПЗ-31', 'ІПЗ-32'],
+  type: [String],
+  description: 'Назви лекційних груп (якщо ще немає в системі)',
+  })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  @Type(() => String)
+  groups?: string[];
+
+  @ApiPropertyOptional({
+    example: ['ІПЗ-31/1', 'ІПЗ-31/2'],
+    type: [String],
+    description: 'Назви практичних груп (якщо ще немає в системі)',
+  })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  @Type(() => String)
+  practiceGroups?: string[];
+
+  @ApiPropertyOptional({
     example: ['550e8400-e29b-41d4-a716-446655440000'],
     type: [String],
     description: 'UUID користувачів-членів команди',

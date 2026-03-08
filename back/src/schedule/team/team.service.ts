@@ -60,6 +60,8 @@ export class TeamService {
             practice_type: dto.practiceType ?? '',
             teacher_lecture: dto.teacherLecture ?? '',
             teacher_practice: dto.teacherPractice ?? '',
+            groups: dto.groups ?? [],
+            practice_groups: dto.practiceGroups ?? [],
             placed_hours: dto.placedHours ?? 0,
         });
 
@@ -148,6 +150,8 @@ export class TeamService {
         if (dto.teacherLecture !== undefined) team.teacher_lecture = dto.teacherLecture;
         if (dto.teacherPractice !== undefined) team.teacher_practice = dto.teacherPractice;
         if (dto.placedHours !== undefined) team.placed_hours = dto.placedHours;
+        if (dto.groups !== undefined) team.groups = dto.groups;
+        if (dto.practiceGroups !== undefined) team.practice_groups = dto.practiceGroups;
 
         // связи
         if (dto.orderIds !== undefined) {

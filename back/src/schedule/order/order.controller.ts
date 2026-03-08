@@ -26,21 +26,6 @@ import { Team } from '../team/entities/team.entity';
 export class OrderController {
     constructor(private readonly orderService: OrderService) {}
 
-    @Get()
-    async getByIdOrder( 
-        @Query() query: GetIdOrderDto,
-    ) {
-        try { 
-            return await this.orderService.GetByIdOrder(query);
-        } catch (error) {
-            throw new BadRequestException({
-                statusCode: HttpStatus.BAD_REQUEST,
-                message: `Order by id failed: ${error.message}`,
-                error: "Bad request"
-            });
-        }
-    }
-
     @Get('paginate')
     async paginateOrder( 
         @Query() query: PaginateOrderDto,
@@ -55,6 +40,23 @@ export class OrderController {
             });
         }
     }
+
+ @Get(':id')
+    async getByIdOrder(
+        @Param('id') id: string,
+        @Query() query: GetIdOrderDto,
+    ) {
+        try {
+            return await this.orderService.GetByIdOrder({ ...query, id });
+        } catch (error) {
+            throw new BadRequestException({
+                statusCode: HttpStatus.BAD_REQUEST,
+                message: `Order by id failed: ${error.message}`,
+                error: "Bad request"
+            });
+        }
+    }
+    
 
     @Get(':id/teams')
     async getOrderTeams(@Param('id') id: string): Promise<Team[]> {

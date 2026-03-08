@@ -51,6 +51,12 @@ export class Team {
   @Column({ type: 'int', default: 0 })
   placed_hours: number;
 
+  @Column('text', { array: true, default: [] })
+  groups: string[];
+
+  @Column('text', { array: true, default: [] })
+  practice_groups: string[];
+
   @ManyToMany(() => Member, (member) => member.teams, {
     cascade: ['insert', 'update'],
   })

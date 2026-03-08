@@ -158,22 +158,22 @@ export class OrderService {
         }
     }
 
-    async GetByIdOrder(dto: GetIdOrderDto): Promise<Order> {
-        const { id, includeTeams, includeEvents } = dto; 
-    
-        const relations: string[] = [];
-        if (includeTeams) relations.push('teams');
-        if (includeEvents) relations.push('events'); 
+    async GetByIdOrder(dto: GetIdOrderDto & { id: string }): Promise<Order> {
+        const { id, includeTeams = false, includeEvents = false } = dto;
         
+        const relations: string[] = ['faculty'];
+        if (includeTeams) relations.push('teams');
+        if (includeEvents) relations.push('events');
+
         const order = await this.orderRepository.findOne({
             where: { id },
-            relations
+            relations,
         });
 
-        
         if (!order) {
             throw new NotFoundException(`Order with ID ${id} not found`);
         }
+
         return order;
     }
 

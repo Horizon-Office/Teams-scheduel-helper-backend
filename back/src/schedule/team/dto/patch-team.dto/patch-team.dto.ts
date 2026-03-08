@@ -65,6 +65,28 @@ export class PatchTeamDto {
   @IsString()
   practiceType?: string;
 
+  @ApiPropertyOptional({
+  example: ['ІПЗ-31', 'ІПЗ-32'],
+  type: [String],
+  description: 'Назви лекційних груп (якщо ще немає в системі)',
+  })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  @Type(() => String)
+  groups?: string[];
+
+  @ApiPropertyOptional({
+    example: ['ІПЗ-31/1', 'ІПЗ-31/2'],
+    type: [String],
+    description: 'Назви практичних груп (якщо ще немає в системі)',
+  })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  @Type(() => String)
+  practiceGroups?: string[];
+
   @ApiPropertyOptional({ example: 'Сафаров О.О., доцент' })
   @IsOptional()
   @IsString()
