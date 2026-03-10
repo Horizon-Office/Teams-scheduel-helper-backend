@@ -40,7 +40,8 @@ export class MicrosoftTeamsImportService {
     });
 
     const location = createResponse.headers['location'];
-    const teamId = location?.split('/teams/')[1]?.split('/')[0];
+    const teamIdMatch = location?.match(/teams\('([^']+)'\)/);
+    const teamId = teamIdMatch?.[1];
 
     if (!teamId) {
       throw new Error(`Failed to extract teamId from location: ${location}`);

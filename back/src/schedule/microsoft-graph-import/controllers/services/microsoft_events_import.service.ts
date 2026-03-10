@@ -84,23 +84,52 @@ export class MicrosoftEventsImportService {
       };
     }
 
+    // 1. Создаём событие у организатора (teacherId)
+    const organizerEvent = await this.postEvent(teacherId, requestBody, appToken);
+
+    // 2. Создаём копию события напрямую в календаре каждого участника
+    //    Убираем attendees чтобы не было цепочки приглашений
+    const attendeeBody = { ...requestBody, attendees: [] };
+
+    const attendeeUserIds = [
+      ...members
+        .filter((m) => m.id !== teacherId)
+        .map((m) => m.id),
+    ];
+
+    await Promise.allSettled(
+      attendeeUserIds.map((userId) =>
+        this.postEvent(userId, attendeeBody, appToken),
+      ),
+    );
+
+    return organizerEvent;
+  }
+
+  private async postEvent(
+    userId: string,
+    body: Record<string, unknown>,
+    token: string,
+  ) {
     const response = await fetch(
-      `https://graph.microsoft.com/v1.0/users/${teacherId}/calendar/events`,
+      `https://graph.microsoft.com/v1.0/users/${userId}/calendar/events`,
       {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${appToken}`,
+          Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(requestBody),
+        body: JSON.stringify(body),
       },
     );
 
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(`Microsoft Graph request failed: ${JSON.stringify(error)}`);
+      throw new Error(
+        `Graph API failed for user ${userId}: ${JSON.stringify(error)}`,
+      );
     }
 
-    return await response.json();
+    return response.json();
   }
 }
