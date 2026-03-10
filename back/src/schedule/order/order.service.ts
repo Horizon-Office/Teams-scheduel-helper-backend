@@ -96,6 +96,9 @@ export class OrderService {
         const queryBuilder = this.orderRepository.createQueryBuilder('order');
         this.applyFilters(queryBuilder, facultyId, search);
 
+        // Всегда добавляем подсчёт команд (без загрузки самих команд)
+        queryBuilder.loadRelationCountAndMap('order.teamsCount', 'order.teams');
+
         if (includeTeams) {
             queryBuilder.leftJoinAndSelect('order.teams', 'teams');
         }
@@ -103,6 +106,7 @@ export class OrderService {
         if (includeEvents) {
             queryBuilder.leftJoinAndSelect('order.events', 'events');
         }
+
         queryBuilder.orderBy('order.name', 'ASC');
         
         const [data, total] = await queryBuilder
@@ -111,8 +115,6 @@ export class OrderService {
             .getManyAndCount();
         
         const totalPages = Math.ceil(total / limit);
-        const hasNextPage = page < totalPages;
-        const hasPrevPage = page > 1;
 
         return {
             data,
@@ -122,8 +124,8 @@ export class OrderService {
                 limit,
                 search,
                 totalPages,
-                hasNextPage,
-                hasPrevPage,
+                hasNextPage: page < totalPages,
+                hasPrevPage: page > 1,
             },
         };
     }

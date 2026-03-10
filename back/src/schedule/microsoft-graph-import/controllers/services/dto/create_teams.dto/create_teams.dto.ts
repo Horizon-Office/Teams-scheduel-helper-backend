@@ -19,24 +19,27 @@ class TeamMemberDto {
 }
 
 export class CreateTeamDto {
-  @ApiProperty({ example: 'https://graph.microsoft.com/v1.0/teamsTemplates("standard")' })
+  @ApiProperty({ example: "https://graph.microsoft.com/v1.0/teamsTemplates('standard')" })
   @IsNotEmpty()
   @IsString()
   'template@odata.bind': string;
 
+  @IsString()
+  @IsNotEmpty()
+  department: string; 
+  
   @ApiProperty({ example: '121-24-1 Дискретна Математика Практика' })
   @IsNotEmpty()
   @IsString()
   displayName: string;
 
-  @ApiProperty({ example: 'My sample team"s description' })
+  @ApiProperty({ example: "My sample team's description" })
   @IsOptional()
   @IsString()
   description?: string;
 
-  @ApiProperty({ type: [TeamMemberDto] })
-  @IsArray()
-  @ValidateNested({ each: true })
+  @ApiProperty({ type: TeamMemberDto })
+  @ValidateNested()
   @Type(() => TeamMemberDto)
-  members: TeamMemberDto[];
+  member: TeamMemberDto;
 }

@@ -3,6 +3,7 @@ import { MicrosoftTeamsImportController } from './controllers/microsoft_teams_im
 import { MicrosoftEventsImportController } from './controllers/microsoft_events_import.controller';
 import { MicrosoftTeamsImportService } from './controllers/services/microsoft_teams_import.service';
 import { MicrosoftEventsImportService } from './controllers/services/microsoft_events_import.service'
+import { MicrosoftGraphSecurityClientService } from 'src/client/microsoft_graph/microsoft_graph_security.service';
 
 
 @Module({
@@ -12,7 +13,8 @@ import { MicrosoftEventsImportService } from './controllers/services/microsoft_e
   ],
   providers: [
   MicrosoftTeamsImportService,
-  MicrosoftEventsImportService
+  MicrosoftEventsImportService,
+  MicrosoftGraphSecurityClientService
 ]
 })
 export class MicrosoftGraphImportModule {}

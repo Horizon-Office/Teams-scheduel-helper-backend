@@ -11,6 +11,7 @@ import {
 import { MicrosoftEventsImportService } from './services/microsoft_events_import.service';
 import { CreateEventDto } from './services/dto/create_event.dto/create_event.dto';
 import { DateValidationPipe } from '../../../pipes/date-validation.pipe';
+import { BadRequestException } from '@nestjs/common';
 
 @Controller('microsoft-graph-events-import')
 export class MicrosoftEventsImportController {
@@ -18,17 +19,14 @@ export class MicrosoftEventsImportController {
         private readonly microsoftEventsService: MicrosoftEventsImportService
     ) {}
 
-    @Post()
+    @Post('event')
     @HttpCode(HttpStatus.CREATED)
-    @UsePipes(new ValidationPipe({ transform: true }), new DateValidationPipe())
-    async createEvent(
-        @Body() createEventDto: CreateEventDto,
-        @Headers('Authorization') authorization: string
-    ) {
-        const accessToken = authorization?.replace('Bearer ', '');
-        if (!accessToken) {
-            throw new Error('Authorization token is required');
-        }
-        
+    @UsePipes(new ValidationPipe({ transform: true }))
+    async createEvent(@Body() createEventDto: CreateEventDto) {
+        return this.microsoftEventsService.createEvent(
+            createEventDto,
+            createEventDto.teacherId
+        );
     }
+    
 }

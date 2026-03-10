@@ -1,22 +1,19 @@
 import { 
-  IsString, 
-  IsBoolean, 
-  IsArray, 
-  IsNumber, 
-  IsOptional,
-  IsObject,
-  ValidateNested,
-  IsEnum
+  IsString, IsBoolean, IsArray, IsNumber, IsOptional,
+  IsObject, ValidateNested, IsEnum, IsNotEmpty
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
 class EmailAddressDto {
   @IsString()
+  @IsNotEmpty()
   address: string;
 
   @IsString()
+  @IsNotEmpty()
   name: string;
 }
+
 
 class AttendeeDto {
   @IsObject()
@@ -30,10 +27,16 @@ class AttendeeDto {
 
 export class CreateEventDto {
   @IsString()
-  teamid: string;
+  @IsNotEmpty()
+  teacherId: string;
 
   @IsString()
+  @IsNotEmpty()
   subject: string;
+  
+  @IsString()
+  @IsNotEmpty()
+  department: string;
 
   @IsOptional()
   @IsObject()
@@ -54,11 +57,10 @@ export class CreateEventDto {
     timeZone: string;
   };
 
-  @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => AttendeeDto)
-  attendees?: AttendeeDto[];
+  attendees: AttendeeDto[];
 
   @IsOptional()
   @IsBoolean()

@@ -32,10 +32,11 @@ export interface GraphUserResponse {
 
 @Injectable()
 export class MicrosoftGraphSecurityClientService {
-  private readonly clientId: string;
-  private readonly clientSecret: string;
-  private readonly tenantId: string;
-
+    private readonly clientId: string;
+    private readonly clientSecret: string;
+    private readonly tenantId: string;
+    private cachedToken: string | null = null;
+    private tokenExpiresAt: number = 0;
 
   constructor(private readonly configService: ConfigService) {
 
@@ -45,6 +46,40 @@ export class MicrosoftGraphSecurityClientService {
     this.tenantId = config.tenant_id;
     
     console.log('MicrosoftGraph service initialized');
+  }
+
+  async getAppToken(): Promise<string> {
+    // Возвращаем кэшированный токен если ещё не истёк
+    if (this.cachedToken && Date.now() < this.tokenExpiresAt) {
+      return this.cachedToken;
+    }
+
+    const response = await fetch(
+      `https://login.microsoftonline.com/${this.tenantId}/oauth2/v2.0/token`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          grant_type: 'client_credentials',
+          client_id: this.clientId,
+          client_secret: this.clientSecret,
+          scope: 'https://graph.microsoft.com/.default'
+        })
+      }
+    );
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(`Failed to get app token: ${JSON.stringify(error)}`);
+    }
+
+    const data = await response.json();
+    
+    this.cachedToken = data.access_token;
+    // Обновляем за 5 минут до истечения
+    this.tokenExpiresAt = Date.now() + (data.expires_in - 300) * 1000;
+
+    return this.cachedToken as string;
   }
 
 
