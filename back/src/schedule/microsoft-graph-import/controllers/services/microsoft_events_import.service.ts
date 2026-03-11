@@ -17,14 +17,13 @@ export class MicrosoftEventsImportService {
       getMembersByDepartment(this.microsoftGraphClient, createEventDto.department),
     ]);
 
-    const leaderAttendee = createEventDto.attendees?.[0];
+    console.log(
+      `Dept "${createEventDto.department}": ${members.length} members found, teacherId=${teacherId}`,
+    );
 
-    const departmentAttendees = members
-      .filter(
-        (m) =>
-          m.id !== teacherId &&
-          m.mail !== leaderAttendee?.emailAddress?.address,
-      )
+    // Все члены департамента кроме организатора — как attendees
+    const attendees = members
+      .filter((m) => m.id !== teacherId && m.mail)
       .map((m) => ({
         emailAddress: {
           address: m.mail,
@@ -33,10 +32,7 @@ export class MicrosoftEventsImportService {
         type: 'required' as const,
       }));
 
-    const attendees = [
-      ...(leaderAttendee ? [leaderAttendee] : []),
-      ...departmentAttendees,
-    ];
+    console.log(`Attendees count: ${attendees.length}`);
 
     const requestBody: Record<string, unknown> = {
       subject: createEventDto.subject,
@@ -51,8 +47,8 @@ export class MicrosoftEventsImportService {
       isOnlineMeeting: createEventDto.isOnlineMeeting ?? true,
       onlineMeetingProvider: this.ONLINE_MEETING_PROVIDER,
       reminderMinutesBeforeStart: createEventDto.reminderMinutesBeforeStart ?? 15,
-      responseRequested: false,
-      attendees,
+      responseRequested: true,
+      attendees, // ← Graph автоматически разошлёт инвайты всем
     };
 
     if (createEventDto.body) {
@@ -84,26 +80,9 @@ export class MicrosoftEventsImportService {
       };
     }
 
-    // 1. Создаём событие у организатора (teacherId)
-    const organizerEvent = await this.postEvent(teacherId, requestBody, appToken);
-
-    // 2. Создаём копию события напрямую в календаре каждого участника
-    //    Убираем attendees чтобы не было цепочки приглашений
-    const attendeeBody = { ...requestBody, attendees: [] };
-
-    const attendeeUserIds = [
-      ...members
-        .filter((m) => m.id !== teacherId)
-        .map((m) => m.id),
-    ];
-
-    await Promise.allSettled(
-      attendeeUserIds.map((userId) =>
-        this.postEvent(userId, attendeeBody, appToken),
-      ),
-    );
-
-    return organizerEvent;
+    // Создаём ОДНО событие только у организатора
+    // Graph сам рассылает инвайты attendees — никаких дублей
+    return this.postEvent(teacherId, requestBody, appToken);
   }
 
   private async postEvent(

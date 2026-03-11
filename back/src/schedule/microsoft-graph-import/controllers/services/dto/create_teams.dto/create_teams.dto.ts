@@ -24,10 +24,17 @@ export class CreateTeamDto {
   @IsString()
   'template@odata.bind': string;
 
+  // CreateTeamDto — добавить поле
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  mailNickname?: string;
+
+
   @IsString()
   @IsNotEmpty()
   department: string; 
-  
+
   @ApiProperty({ example: '121-24-1 Дискретна Математика Практика' })
   @IsNotEmpty()
   @IsString()
