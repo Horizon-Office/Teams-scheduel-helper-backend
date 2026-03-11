@@ -23,6 +23,10 @@ export class Order {
   @Column({ type: 'int', default: 0 })
   student_count: number;
 
+  @Column({ type: 'boolean', default: false })
+  imported: boolean;
+
+
   @ManyToOne(() => Faculty, (faculty) => faculty.orders, { nullable: false })
   @JoinColumn({ name: 'faculty_id' })
   faculty: Faculty;
