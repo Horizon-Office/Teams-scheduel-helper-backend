@@ -33,23 +33,10 @@ const transliterate = (str: string): string =>
 
 /**
  * Генерирует уникальный mailNickname для MS Graph Teams.
- *
  * Формат: <транслит-displayName-до-40-символов>-<8-hex-символов>
- * Пример: "121-22-1-Analiz-bezpeky-a3f9c12b"
- *
- * Суффикс UUID гарантирует уникальность — MS Graph вернёт
- * UnableToGenerateValidTeamAlias если nickname уже занят в тенанте.
  */
-const generateMailNickname = (displayName: string): string => {
-  const base = transliterate(displayName)
-    .replace(/[^a-zA-Z0-9-]/g, '-')  // кириллица/спецсимволы → дефис
-    .replace(/-+/g, '-')             // схлопываем повторы
-    .replace(/^-|-$/g, '')           // убираем крайние дефисы
-    .slice(0, 40);                   // оставляем место для суффикса
-
-  const suffix = randomUUID().replace(/-/g, '').slice(0, 8); // 8 hex-символов
-
-  return `${base}-${suffix}`.replace(/^-/, ''); // страховка если base пуст
+const generateMailNickname = (_displayName: string): string => {
+  return `team-${randomUUID().replace(/-/g, '').slice(0, 16)}`;
 };
 
 @Injectable()
@@ -64,14 +51,19 @@ export class MicrosoftTeamsImportService {
   async createTeam(createTeamDto: CreateTeamDto) {
     const appToken = await this.microsoftGraphClient.getAppToken();
 
-    const mailNickname = createTeamDto.mailNickname ?? generateMailNickname(createTeamDto.displayName);
-    this.logger.debug(`Generated mailNickname: "${mailNickname}" for team "${createTeamDto.displayName}"`);
+    // Обрезаем до 80 символов — alias генерируется из displayName
+    const displayName = createTeamDto.displayName.length > 80
+      ? createTeamDto.displayName.slice(0, 80).trimEnd()
+      : createTeamDto.displayName;
+
+    const mailNickname = createTeamDto.mailNickname ?? generateMailNickname(displayName);
+    this.logger.debug(`Generated mailNickname: "${mailNickname}" for team "${displayName}"`);
 
     const requestBody = {
       'template@odata.bind': createTeamDto['template@odata.bind'],
-      displayName:           createTeamDto.displayName,
+      displayName,
       description:           createTeamDto.description,
-      mailNickname,                                           // 👈 гарантированно уникальный ASCII-nickname
+      mailNickname,
       members: [
         {
           '@odata.type':     createTeamDto.member['@odata.type'],
@@ -81,12 +73,55 @@ export class MicrosoftTeamsImportService {
       ],
     };
 
-    const createResponse = await axios.post(this.graphApiUrl, requestBody, {
-      headers: {
-        Authorization:  `Bearer ${appToken}`,
-        'Content-Type': 'application/json',
-      },
-    });
+    // ← try/catch здесь — вокруг создания команды
+    let createResponse: Awaited<ReturnType<typeof axios.post>>;
+    try {
+      createResponse = await axios.post(this.graphApiUrl, requestBody, {
+        headers: {
+          Authorization:  `Bearer ${appToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
+    } catch (err) {
+  const graphError = err.response?.data;
+  const errorCode  = graphError?.error?.innerError?.code;
+  const location   = err.response?.headers?.['location'];
+
+  if (location) {
+    // Команда создалась несмотря на ошибку — продолжаем
+    this.logger.warn(`BadRequest but location exists: ${location}. Proceeding.`);
+    createResponse = { headers: { location } } as any;
+
+  } else if (errorCode === 'BadRequest') {
+    // UnableToGenerateValidTeamAlias без location — повторяем с новым mailNickname
+    this.logger.warn(`UnableToGenerateValidTeamAlias, retrying with new mailNickname...`);
+    await this.sleep(3000);
+
+    const retryBody = { ...requestBody, mailNickname: generateMailNickname(displayName) };
+    try {
+      createResponse = await axios.post(this.graphApiUrl, retryBody, {
+        headers: {
+          Authorization:  `Bearer ${appToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
+    } catch (retryErr) {
+      const retryLocation = retryErr.response?.headers?.['location'];
+      if (retryLocation) {
+        this.logger.warn(`Retry also got BadRequest but location exists. Proceeding.`);
+        createResponse = { headers: { location: retryLocation } } as any;
+      } else {
+        throw new Error(
+          `Graph team creation failed after retry: ${retryErr.response?.data?.error?.message ?? retryErr.message}`,
+        );
+      }
+    }
+
+  } else {
+    this.logger.error(`Graph API error creating team "${displayName}": ${JSON.stringify(graphError)}`);
+    throw new Error(`Graph team creation failed: ${graphError?.error?.message ?? err.message}`);
+  }
+}
 
     const location    = createResponse.headers['location'];
     const teamIdMatch = location?.match(/teams\('([^']+)'\)/);
@@ -108,7 +143,7 @@ export class MicrosoftTeamsImportService {
     const leaderIdMatch = createTeamDto.member['user@odata.bind'].match(
       /users\('?([^')]+)'?\)/,
     );
-    const leaderId    = leaderIdMatch?.[1];
+    const leaderId     = leaderIdMatch?.[1];
     const membersToAdd = members.filter((m) => m.id !== leaderId);
 
     await Promise.all(
