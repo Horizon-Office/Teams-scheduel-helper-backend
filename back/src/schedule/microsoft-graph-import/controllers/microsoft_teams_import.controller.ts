@@ -1,17 +1,33 @@
-import { Controller, Post, Body, Headers, HttpCode, HttpStatus } from '@nestjs/common';
-import { CreateTeamDto } from './services/dto/create_teams.dto/create_teams.dto';
+import { Body, Controller, Post } from '@nestjs/common';
 import { MicrosoftTeamsImportService } from './services/microsoft_teams_import.service';
-import { UsePipes, ValidationPipe, BadRequestException } from '@nestjs/common';
+
+export type Group = {
+    displayName: string,
+    departments: string[],
+    description: string,
+    owner: {
+        name: string;
+        id: string;
+    };
+}
 
 @Controller('microsoft-graph-teams-import')
 export class MicrosoftTeamsImportController {
-  constructor(private readonly teamsService: MicrosoftTeamsImportService) {}
+    constructor(
+        private readonly teamsImportService: MicrosoftTeamsImportService,
+    ) { }
 
-  @Post('team')
-  @HttpCode(HttpStatus.CREATED)
-  @UsePipes(new ValidationPipe({ transform: true }))
-  async createTeam(@Body() createTeamDto: CreateTeamDto) {
-    return this.teamsService.createTeam(createTeamDto);
-  }
-  
-}
+    @Post('create-teams')
+    async createTeams(
+        @Body('groups') groups: Group[],
+    ): Promise<any> {
+        if (!groups) {
+            return {
+                success: false,
+                message: 'At least one of "teams" or "departments" is required',
+            };
+        }
+
+        return this.teamsImportService.createTeams(groups || []);
+    }
+}   
