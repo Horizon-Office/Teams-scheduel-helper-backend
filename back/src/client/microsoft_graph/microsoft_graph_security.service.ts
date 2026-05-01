@@ -4,7 +4,35 @@ import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import type { Cache } from 'cache-manager';
 import axios from 'axios';
 
-type AddUserStatus = 'added' | 'already_exists' | 'failed';
+
+interface GraphAddTeamMemberResult {
+  userId: string;
+  error: null | {
+    code?: string;
+    message?: string;
+    [key: string]: any;
+  };
+}
+
+export interface StartTeamCreationResult {
+  teamName: string;
+  status: 'accepted' | 'created';
+  operationUrl?: string;
+  teamId?: string;
+}
+
+interface GraphAddTeamMembersResponse {
+  value?: GraphAddTeamMemberResult[];
+}
+
+interface AddDepartmentMembersToTeamResult {
+  teamId: string;
+  departments: string[];
+  totalUsers: number;
+  totalAdded: number;
+  totalFailed: number;
+  failedUsers: GraphAddTeamMemberResult[];
+}
 
 interface TokenResponse {
   access_token: string;
@@ -27,24 +55,6 @@ interface TokenRefresh {
   expires_in: number;
   access_token: string;
   refresh_token?: string;
-}
-
-interface AddTeamMemberResult {
-  userId: string;
-  displayName: string;
-  status: AddUserStatus;
-  statusCode?: number;
-  error?: string;
-}
-
-interface AddDepartmentMembersResult {
-  teamId: string;
-  departments: string[];
-  totalUsers: number;
-  totalAdded: number;
-  totalAlreadyExists: number;
-  totalFailed: number;
-  results: Record<string, AddTeamMemberResult>;
 }
 
 
@@ -74,15 +84,10 @@ export class MicrosoftGraphSecurityClientService {
   private readonly tenantId: string;
   private readonly GRAPH_BASE_URL = 'https://graph.microsoft.com/v1.0';
   private readonly APP_TOKEN_CACHE_KEY = 'microsoft-graph:app-token';
-  private normalizeDepartments(department: string | string[]): string[] {
-    const departments = Array.isArray(department)
-      ? department
-      : [department];
 
-    return departments
-      .map((item) => item.trim())
-      .filter(Boolean);
-  };
+  private delay(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
 
   constructor(
     private readonly configService: ConfigService,
@@ -146,206 +151,30 @@ export class MicrosoftGraphSecurityClientService {
     return response.data.value ?? [];
   }
 
-  async addDepartmentMembersToTeam(
-    departments: string[],
-    teamId: string,
-  ): Promise<AddDepartmentMembersResult> {
-    const users = await this.getMembersByDepartment(departments);
-    const token = await this.getAppToken();
-
-    const tempCachePrefix = `teams:add-members:${teamId}:${departments.join('-')}:${Date.now()}`;
-
-    const concurrency = 4;
-
-    await this.mapWithConcurrency(users, concurrency, async (user, index) => {
-      await this.sleep(index * 300);
-
-      const result = await this.addSingleUserToTeamWithRetry({
-        token,
-        teamId,
-        userId: user.id,
-        displayName: user.displayName,
-      });
-
-      await this.cacheManager.set(
-        `${tempCachePrefix}:${user.id}`,
-        result,
-        60 * 60,
-      );
-
-      return result;
-    });
-
-    const cachedEntries = await Promise.all(
-      users.map(async (user) => {
-        const result = await this.cacheManager.get<AddTeamMemberResult>(
-          `${tempCachePrefix}:${user.id}`,
-        );
-
-        if (!result) {
-          return null;
-        }
-
-        return [user.id, result] as const;
-      }),
-    );
-
-    const results: Record<string, AddTeamMemberResult> = Object.fromEntries(
-      cachedEntries.filter(
-        (entry): entry is readonly [string, AddTeamMemberResult] => entry !== null,
-      ),
-    );
-
-    await Promise.all(
-      users.map((user) => this.cacheManager.del(`${tempCachePrefix}:${user.id}`)),
-    );
-
-    const values = Object.values(results);
-
-    return {
-      teamId,
-      departments,
-      totalUsers: users.length,
-      totalAdded: values.filter((item) => item.status === 'added').length,
-      totalAlreadyExists: values.filter((item) => item.status === 'already_exists').length,
-      totalFailed: values.filter((item) => item.status === 'failed').length,
-      results,
-    };
-  }
-
-  private async addSingleUserToTeamWithRetry(params: {
-    token: string;
-    teamId: string;
-    userId: string;
-    displayName: string;
-    attempt?: number;
-  }): Promise<AddTeamMemberResult> {
-    const { token, teamId, userId, displayName } = params;
-    const attempt = params.attempt ?? 1;
-
-    try {
-      await axios.post(
-        `${this.GRAPH_BASE_URL}/teams/${teamId}/members`,
-        {
-          '@odata.type': '#microsoft.graph.aadUserConversationMember',
-          roles: [],
-          'user@odata.bind': `${this.GRAPH_BASE_URL}/users('${userId}')`,
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        },
-      );
-
-      return {
-        userId,
-        displayName,
-        status: 'added',
-        statusCode: 201,
-      };
-    } catch (error: any) {
-      const statusCode = error.response?.status;
-
-      const graphMessage =
-        error.response?.data?.error?.message ??
-        error.message ??
-        'Unknown Graph API error';
-
-      const isAlreadyExists =
-        statusCode === 409 ||
-        graphMessage.toLowerCase().includes('already exist') ||
-        graphMessage.toLowerCase().includes('already a member');
-
-      if (isAlreadyExists) {
-        return {
-          userId,
-          displayName,
-          status: 'already_exists',
-          statusCode,
-          error: graphMessage,
-        };
-      }
-
-      if (statusCode === 429 && attempt < 4) {
-        const retryAfterHeader = error.response?.headers?.['retry-after'];
-        const retryAfterSeconds = Number(retryAfterHeader);
-
-        const delayMs = Number.isFinite(retryAfterSeconds)
-          ? retryAfterSeconds * 1000
-          : attempt * 3000;
-
-        await this.sleep(delayMs);
-
-        return this.addSingleUserToTeamWithRetry({
-          token,
-          teamId,
-          userId,
-          displayName,
-          attempt: attempt + 1,
-        });
-      }
-
-      return {
-        userId,
-        displayName,
-        status: 'failed',
-        statusCode,
-        error: graphMessage,
-      };
-    }
-  }
-
-  private async mapWithConcurrency<T, R>(
-    items: T[],
-    concurrency: number,
-    mapper: (item: T, index: number) => Promise<R>,
-  ): Promise<R[]> {
-    const results: R[] = [];
-    let currentIndex = 0;
-
-    const workers = Array.from(
-      { length: Math.min(concurrency, items.length) },
-      async () => {
-        while (currentIndex < items.length) {
-          const index = currentIndex++;
-          results[index] = await mapper(items[index], index);
-        }
-      },
-    );
-
-    await Promise.all(workers);
-
-    return results;
-  }
-
-  private sleep(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-  }
-
   /**
-   * Создает команду в Microsoft Graph и дожидается окончания провиженинга
-   * @param displayName Имя команды
-   * @param ownerId ID пользователя, который станет владельцем (UUID)
-   * @param description Описание команды
-   * @returns Объект с именем и ID созданной команды
-   */
-  async createTeam(
+ * Starts Microsoft Teams creation and returns operation URL without waiting for provisioning.
+ *
+ * @param displayName Team name
+ * @param ownerId Owner user ID
+ * @param description Team description
+ * @returns Operation URL or immediately created team ID
+ */
+  async startTeamCreation(
     displayName: string,
     ownerId: string,
-    description: string
-  ): Promise<{ teamName: string; teamId: string }> {
+    description: string,
+  ): Promise<StartTeamCreationResult> {
     const token = await this.getAppToken();
+
     const payload = {
       'template@odata.bind': "https://graph.microsoft.com/v1.0/teamsTemplates('standard')",
-      displayName: displayName,
-      description: description,
+      displayName,
+      description,
       members: [
         {
           '@odata.type': '#microsoft.graph.aadUserConversationMember',
           roles: ['owner'],
-          'user@odata.bind': `https://graph.microsoft.com/v1.0/users('${ownerId}')`,
+          'user@odata.bind': `${this.GRAPH_BASE_URL}/users('${ownerId}')`,
         },
       ],
     };
@@ -359,68 +188,239 @@ export class MicrosoftGraphSecurityClientService {
             Authorization: `Bearer ${token}`,
             'Content-Type': 'application/json',
           },
-        }
+        },
       );
 
       if (response.status === 202) {
-        let operationUrl = response.headers['location'];
-        if (!operationUrl) {
+        const location = response.headers['location'];
+
+        if (!location) {
           throw new Error('Location header is missing in 202 response');
         }
 
-        if (operationUrl.startsWith('/')) {
-          operationUrl = `https://graph.microsoft.com/v1.0${operationUrl}`;
-        }
-
-        let isComplete = false;
-        let attempts = 0;
-        const maxAttempts = 24;
-        const delayMs = 5000;
-
-        while (!isComplete && attempts < maxAttempts) {
-          attempts++;
-
-          await new Promise((resolve) => setTimeout(resolve, delayMs));
-
-          const opResponse = await axios.get<GraphOperationResponse>(operationUrl, {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          });
-
-          const opStatus = opResponse.data.status;
-
-          if (opStatus === 'succeeded') {
-            isComplete = true;
-            return {
-              teamName: displayName,
-              teamId: opResponse.data.targetResourceId as string,
-            };
-          } else if (opStatus === 'failed') {
-            throw new Error(`Team provisioning failed: ${JSON.stringify(opResponse.data.error)}`);
-          }
-        }
-
-        throw new Error('Team creation polling timed out (process took too long)');
+        return {
+          teamName: displayName,
+          status: 'accepted',
+          operationUrl: this.normalizeGraphUrl(location),
+        };
       }
 
-      // Если по какой-то причине API сразу вернет 201 Created (иногда бывает в Graph API)
       if (response.status === 201 && response.data.id) {
         return {
           teamName: displayName,
+          status: 'created',
           teamId: response.data.id,
         };
       }
 
       throw new Error(`Unexpected Graph API response status: ${response.status}`);
-
     } catch (error: any) {
       if (error.response) {
-        // Логируем или пробрасываем ошибку от самого Graph API (например, 400 Bad Request)
-        throw new Error(`Graph API Error [${error.response.status}]: ${JSON.stringify(error.response.data)}`);
+        throw new Error(
+          `Graph API Error [${error.response.status}]: ${JSON.stringify(error.response.data)}`,
+        );
       }
+
       throw error;
     }
+  }
+
+  /**
+   * Gets Teams async operation status.
+   *
+   * @param operationUrl URL from Location header
+   * @returns Teams async operation status
+   */
+  async getTeamCreationOperation(
+    operationUrl: string,
+  ): Promise<GraphOperationResponse> {
+    const token = await this.getAppToken();
+
+    const response = await axios.get<GraphOperationResponse>(
+      this.normalizeGraphUrl(operationUrl),
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      },
+    );
+
+    return response.data;
+  }
+
+  private normalizeGraphUrl(url: string): string {
+    if (url.startsWith('https://')) {
+      return url;
+    }
+
+    if (url.startsWith('/')) {
+      return `${this.GRAPH_BASE_URL}${url}`;
+    }
+
+    return `${this.GRAPH_BASE_URL}/${url}`;
+  }
+
+  /**
+   * Add all users from one or multiple departments to a Microsoft Teams team
+   *
+   * @param department Department name or list of department names
+   * @param teamId Microsoft Teams team ID
+   * @returns Summary with count of added and failed members
+   */
+  async addDepartmentMembersToTeam(
+    department: string | string[],
+    teamId: string,
+  ): Promise<AddDepartmentMembersToTeamResult> {
+    const token = await this.getAppToken();
+
+    const departments = Array.isArray(department)
+      ? department.map((item) => item.trim()).filter(Boolean)
+      : [department.trim()].filter(Boolean);
+
+    if (!teamId?.trim()) {
+      throw new Error('teamId is required');
+    }
+
+    if (!departments.length) {
+      return {
+        teamId,
+        departments: [],
+        totalUsers: 0,
+        totalAdded: 0,
+        totalFailed: 0,
+        failedUsers: [],
+      };
+    }
+
+    const users = await this.getMembersByDepartment(departments);
+
+    // на случай если при нескольких departments вдруг придут дубликаты
+    const uniqueUsers = Array.from(
+      new Map(users.map((user) => [user.id, user])).values(),
+    );
+
+    if (!uniqueUsers.length) {
+      return {
+        teamId,
+        departments,
+        totalUsers: 0,
+        totalAdded: 0,
+        totalFailed: 0,
+        failedUsers: [],
+      };
+    }
+
+    const chunkSize = 200;
+    const results: GraphAddTeamMemberResult[] = [];
+
+    for (let i = 0; i < uniqueUsers.length; i += chunkSize) {
+      const usersChunk = uniqueUsers.slice(i, i + chunkSize);
+
+      const payload = {
+        values: usersChunk.map((user) => ({
+          '@odata.type': '#microsoft.graph.aadUserConversationMember',
+          roles: [],
+          'user@odata.bind': `${this.GRAPH_BASE_URL}/users('${user.id}')`,
+        })),
+      };
+
+      try {
+        const response = await axios.post<GraphAddTeamMembersResponse>(
+          `${this.GRAPH_BASE_URL}/teams/${teamId}/members/add`,
+          payload,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+          },
+        );
+
+        results.push(...(response.data.value ?? []));
+      } catch (error: any) {
+        if (error.response) {
+          throw new Error(
+            `Graph API Error [${error.response.status}]: ${JSON.stringify(error.response.data)}`,
+          );
+        }
+
+        throw error;
+      }
+    }
+
+    const failedUsers = results.filter((result) => result.error);
+    const totalFailed = failedUsers.length;
+
+    return {
+      teamId,
+      departments,
+      totalUsers: uniqueUsers.length,
+      totalAdded: uniqueUsers.length - totalFailed,
+      totalFailed,
+      failedUsers,
+    };
+  }
+
+  /**
+  * Creates Microsoft Team and waits until provisioning is completed.
+  *
+  * @param displayName Team name
+  * @param ownerId Owner user ID
+  * @param description Team description
+  * @returns Created team name and ID
+  */
+  async createTeam(
+    displayName: string,
+    ownerId: string,
+    description: string,
+  ): Promise<{ teamName: string; teamId: string }> {
+    const started = await this.startTeamCreation(
+      displayName,
+      ownerId,
+      description,
+    );
+
+    if (started.status === 'created' && started.teamId) {
+      return {
+        teamName: started.teamName,
+        teamId: started.teamId,
+      };
+    }
+
+    if (!started.operationUrl) {
+      throw new Error('Team creation operation URL is missing');
+    }
+
+    let attempts = 0;
+    const maxAttempts = 24;
+    const delayMs = 10_000;
+
+    while (attempts < maxAttempts) {
+      attempts++;
+
+      await this.delay(delayMs);
+
+      const operation = await this.getTeamCreationOperation(started.operationUrl);
+
+      if (operation.status === 'succeeded') {
+        if (!operation.targetResourceId) {
+          throw new Error('Team creation succeeded but targetResourceId is missing');
+        }
+
+        return {
+          teamName: started.teamName,
+          teamId: operation.targetResourceId,
+        };
+      }
+
+      if (operation.status === 'failed') {
+        throw new Error(
+          `Team provisioning failed: ${JSON.stringify(operation.error)}`,
+        );
+      }
+    }
+
+    throw new Error('Team creation polling timed out');
   }
 
   async getAppToken(): Promise<string> {
