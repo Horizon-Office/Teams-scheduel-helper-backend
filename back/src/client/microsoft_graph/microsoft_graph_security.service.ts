@@ -25,9 +25,8 @@ interface GraphAddTeamMembersResponse {
   value?: GraphAddTeamMemberResult[];
 }
 
-interface AddDepartmentMembersToTeamResult {
+interface AddUsersToTeamResult {
   teamId: string;
-  departments: string[];
   totalUsers: number;
   totalAdded: number;
   totalFailed: number;
@@ -84,10 +83,19 @@ export class MicrosoftGraphSecurityClientService {
   private readonly tenantId: string;
   private readonly GRAPH_BASE_URL = 'https://graph.microsoft.com/v1.0';
   private readonly APP_TOKEN_CACHE_KEY = 'microsoft-graph:app-token';
+  private normalizeGraphUrl(url: string): string {
+    if (url.startsWith('https://')) {
+      return url;
+    }
 
-  private delay(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
+    if (url.startsWith('/')) {
+      return `${this.GRAPH_BASE_URL}${url}`;
+    }
+
+    return `${this.GRAPH_BASE_URL}/${url}`;
   }
+
+
 
   constructor(
     private readonly configService: ConfigService,
@@ -151,7 +159,7 @@ export class MicrosoftGraphSecurityClientService {
     return response.data.value ?? [];
   }
 
-  /**
+ /**
  * Starts Microsoft Teams creation and returns operation URL without waiting for provisioning.
  *
  * @param displayName Team name
@@ -248,67 +256,41 @@ export class MicrosoftGraphSecurityClientService {
     return response.data;
   }
 
-  private normalizeGraphUrl(url: string): string {
-    if (url.startsWith('https://')) {
-      return url;
-    }
 
-    if (url.startsWith('/')) {
-      return `${this.GRAPH_BASE_URL}${url}`;
-    }
-
-    return `${this.GRAPH_BASE_URL}/${url}`;
-  }
-
-  /**
-   * Add all users from one or multiple departments to a Microsoft Teams team
+   /**
+   * Add provided users to a Microsoft Teams team
    *
-   * @param department Department name or list of department names
+   * @param users List of users to add to the team
    * @param teamId Microsoft Teams team ID
    * @returns Summary with count of added and failed members
    */
-  async addDepartmentMembersToTeam(
-    department: string | string[],
+  async addUsersToTeam(
+    users: GraphUserResponse[],
     teamId: string,
-  ): Promise<AddDepartmentMembersToTeamResult> {
-    const token = await this.getAppToken();
-
-    const departments = Array.isArray(department)
-      ? department.map((item) => item.trim()).filter(Boolean)
-      : [department.trim()].filter(Boolean);
-
+  ): Promise<AddUsersToTeamResult> {
     if (!teamId?.trim()) {
       throw new Error('teamId is required');
     }
 
-    if (!departments.length) {
-      return {
-        teamId,
-        departments: [],
-        totalUsers: 0,
-        totalAdded: 0,
-        totalFailed: 0,
-        failedUsers: [],
-      };
-    }
-
-    const users = await this.getMembersByDepartment(departments);
-
-    // на случай если при нескольких departments вдруг придут дубликаты
     const uniqueUsers = Array.from(
-      new Map(users.map((user) => [user.id, user])).values(),
+      new Map(
+        users
+          .filter((user) => user?.id?.trim())
+          .map((user) => [user.id, user]),
+      ).values(),
     );
 
     if (!uniqueUsers.length) {
       return {
         teamId,
-        departments,
         totalUsers: 0,
         totalAdded: 0,
         totalFailed: 0,
         failedUsers: [],
       };
     }
+
+    const token = await this.getAppToken();
 
     const chunkSize = 200;
     const results: GraphAddTeamMemberResult[] = [];
@@ -353,7 +335,6 @@ export class MicrosoftGraphSecurityClientService {
 
     return {
       teamId,
-      departments,
       totalUsers: uniqueUsers.length,
       totalAdded: uniqueUsers.length - totalFailed,
       totalFailed,
@@ -361,67 +342,6 @@ export class MicrosoftGraphSecurityClientService {
     };
   }
 
-  /**
-  * Creates Microsoft Team and waits until provisioning is completed.
-  *
-  * @param displayName Team name
-  * @param ownerId Owner user ID
-  * @param description Team description
-  * @returns Created team name and ID
-  */
-  async createTeam(
-    displayName: string,
-    ownerId: string,
-    description: string,
-  ): Promise<{ teamName: string; teamId: string }> {
-    const started = await this.startTeamCreation(
-      displayName,
-      ownerId,
-      description,
-    );
-
-    if (started.status === 'created' && started.teamId) {
-      return {
-        teamName: started.teamName,
-        teamId: started.teamId,
-      };
-    }
-
-    if (!started.operationUrl) {
-      throw new Error('Team creation operation URL is missing');
-    }
-
-    let attempts = 0;
-    const maxAttempts = 24;
-    const delayMs = 10_000;
-
-    while (attempts < maxAttempts) {
-      attempts++;
-
-      await this.delay(delayMs);
-
-      const operation = await this.getTeamCreationOperation(started.operationUrl);
-
-      if (operation.status === 'succeeded') {
-        if (!operation.targetResourceId) {
-          throw new Error('Team creation succeeded but targetResourceId is missing');
-        }
-
-        return {
-          teamName: started.teamName,
-          teamId: operation.targetResourceId,
-        };
-      }
-
-      if (operation.status === 'failed') {
-        throw new Error(
-          `Team provisioning failed: ${JSON.stringify(operation.error)}`,
-        );
-      }
-    }
-
-    throw new Error('Team creation polling timed out');
-  }
 
   async getAppToken(): Promise<string> {
     const cachedToken = await this.cacheManager.get<AppTokenCache>(

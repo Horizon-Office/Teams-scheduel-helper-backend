@@ -54,26 +54,32 @@ interface StartedTeamItem {
   teamId?: string;
 }
 
+interface StartBatchItem {
+  index: number;
+  group: Group;
+}
+
 @Injectable()
 export class MicrosoftTeamsImportService {
-  private readonly TEAM_START_CONCURRENCY = 50;
-  private readonly TEAM_OPERATION_POLL_CONCURRENCY = 10;
-  private readonly TEAM_FILL_CONCURRENCY = 5;
+  private readonly START_BATCH_SIZE = 10;
+  private readonly START_BATCH_INTERVAL_MS = 1_000;
 
+  private readonly FIRST_POLL_DELAY_MS = 15_000;
   private readonly POLL_DELAY_MS = 15_000;
   private readonly MAX_POLL_ATTEMPTS = 44;
 
   constructor(
     private readonly microsoftGraphClient: MicrosoftGraphSecurityClientService,
-  ) { }
+  ) {}
 
   /**
    * Create Microsoft Teams and fill them with department members.
    *
    * Flow:
-   * 1. Start creation for many teams.
-   * 2. Poll all pending operations.
-   * 3. Fill each team after its operation succeeds.
+   * 1. Split groups into batches by 10.
+   * 2. Start one batch every second.
+   * 3. Each team lifecycle runs independently:
+   *    start creation -> wait -> poll -> fill members.
    *
    * @param groups Groups with team name, description, owner and departments
    * @returns Import result for all processed groups
@@ -85,32 +91,77 @@ export class MicrosoftTeamsImportService {
       return this.buildSummary([]);
     }
 
-    const startedItems = await this.runWithConcurrency(
-      groups,
-      this.TEAM_START_CONCURRENCY,
-      async (group, index) => this.startTeamCreation(group, index, results),
+    const batches = this.createStartBatches(groups, this.START_BATCH_SIZE);
+
+    const batchTasks = batches.map((batch, batchIndex) =>
+      this.scheduleStartBatch(batch, batchIndex, results),
     );
 
-    const pendingItems = startedItems.filter(
-      (item): item is StartedTeamItem => Boolean(item?.operationUrl),
-    );
-
-    const alreadyCreatedItems = startedItems.filter(
-      (item): item is StartedTeamItem => Boolean(item?.teamId),
-    );
-
-    await this.fillCreatedTeams(alreadyCreatedItems, results);
-
-    await this.pollPendingTeamsAndFill(pendingItems, results);
+    await Promise.all(batchTasks);
 
     return this.buildSummary(results);
   }
 
-  private async startTeamCreation(
+  private createStartBatches(
+    groups: Group[],
+    batchSize: number,
+  ): StartBatchItem[][] {
+    const batches: StartBatchItem[][] = [];
+
+    for (let i = 0; i < groups.length; i += batchSize) {
+      const batch = groups.slice(i, i + batchSize).map((group, localIndex) => ({
+        group,
+        index: i + localIndex,
+      }));
+
+      batches.push(batch);
+    }
+
+    return batches;
+  }
+
+  private scheduleStartBatch(
+    batch: StartBatchItem[],
+    batchIndex: number,
+    results: TeamImportGroupResult[],
+  ): Promise<void> {
+    const delayMs = batchIndex * this.START_BATCH_INTERVAL_MS;
+
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        const tasks = batch.map(({ group, index }) =>
+          this.processTeamLifecycle(group, index, results),
+        );
+
+        Promise.all(tasks)
+          .then(() => resolve())
+          .catch((error: any) => {
+            for (const { group, index } of batch) {
+              if (results[index]) {
+                continue;
+              }
+
+              const departments = this.normalizeDepartments(group.departments);
+
+              results[index] = this.createFailedResult(
+                group,
+                index,
+                departments,
+                this.getErrorMessage(error),
+              );
+            }
+
+            resolve();
+          });
+      }, delayMs);
+    });
+  }
+
+  private async processTeamLifecycle(
     group: Group,
     index: number,
     results: TeamImportGroupResult[],
-  ): Promise<StartedTeamItem | null> {
+  ): Promise<void> {
     const departments = this.normalizeDepartments(group.departments);
 
     try {
@@ -120,15 +171,35 @@ export class MicrosoftTeamsImportService {
         group.description,
       );
 
-      const item: StartedTeamItem = {
+      if (started.status === 'created' && started.teamId) {
+        results[index] = await this.fillCreatedTeam({
+          index,
+          group,
+          departments,
+          teamId: started.teamId,
+        });
+
+        return;
+      }
+
+      if (!started.operationUrl) {
+        results[index] = {
+          ...this.createBaseResult(group, index, departments),
+          status: 'failed',
+          error: 'Team creation operation URL is missing',
+        };
+
+        return;
+      }
+
+      await this.delay(this.FIRST_POLL_DELAY_MS);
+
+      results[index] = await this.pollAndFillTeam({
         index,
         group,
         departments,
         operationUrl: started.operationUrl,
-        teamId: started.teamId,
-      };
-
-      return item;
+      });
     } catch (error: any) {
       results[index] = this.createFailedResult(
         group,
@@ -136,123 +207,71 @@ export class MicrosoftTeamsImportService {
         departments,
         this.getErrorMessage(error),
       );
-
-      return null;
     }
   }
 
-  private async pollPendingTeamsAndFill(
-    pendingItems: StartedTeamItem[],
-    results: TeamImportGroupResult[],
-  ): Promise<void> {
-    let pending = [...pendingItems];
-
-    for (
-      let attempt = 1;
-      attempt <= this.MAX_POLL_ATTEMPTS && pending.length > 0;
-      attempt++
-    ) {
-      await this.delay(this.POLL_DELAY_MS);
-
-      const checkedItems = await this.runWithConcurrency(
-        pending,
-        this.TEAM_OPERATION_POLL_CONCURRENCY,
-        async (item) => this.checkTeamOperation(item, results),
-      );
-
-      const succeededItems = checkedItems.filter(
-        (item): item is StartedTeamItem => Boolean(item?.teamId),
-      );
-
-      pending = checkedItems.filter(
-        (item): item is StartedTeamItem =>
-          Boolean(item?.operationUrl) && !item?.teamId,
-      );
-
-      await this.fillCreatedTeams(succeededItems, results);
-    }
-
-    for (const item of pending) {
-      results[item.index] = {
+  private async pollAndFillTeam(
+    item: StartedTeamItem,
+  ): Promise<TeamImportGroupResult> {
+    if (!item.operationUrl) {
+      return {
         ...this.createBaseResult(item.group, item.index, item.departments),
-        status: 'timed_out',
-        operationUrl: item.operationUrl,
-        error: 'Team creation polling timed out',
+        status: 'failed',
+        error: 'operationUrl is missing',
       };
     }
-  }
 
-  private async checkTeamOperation(
-    item: StartedTeamItem,
-    results: TeamImportGroupResult[],
-  ): Promise<StartedTeamItem | null> {
-    if (!item.operationUrl) {
-      return item;
-    }
+    for (let attempt = 1; attempt <= this.MAX_POLL_ATTEMPTS; attempt++) {
+      try {
+        const operation =
+          await this.microsoftGraphClient.getTeamCreationOperation(
+            item.operationUrl,
+          );
 
-    try {
-      const operation =
-        await this.microsoftGraphClient.getTeamCreationOperation(
-          item.operationUrl,
-        );
+        if (operation.status === 'succeeded') {
+          if (!operation.targetResourceId) {
+            return {
+              ...this.createBaseResult(item.group, item.index, item.departments),
+              status: 'failed',
+              operationUrl: item.operationUrl,
+              error: 'Team creation succeeded but targetResourceId is missing',
+            };
+          }
 
-      if (operation.status === 'succeeded') {
-        if (!operation.targetResourceId) {
-          results[item.index] = {
+          return this.fillCreatedTeam({
+            ...item,
+            teamId: operation.targetResourceId,
+          });
+        }
+
+        if (operation.status === 'failed') {
+          return {
             ...this.createBaseResult(item.group, item.index, item.departments),
             status: 'failed',
             operationUrl: item.operationUrl,
-            error: 'Team creation succeeded but targetResourceId is missing',
+            error: `Team provisioning failed: ${JSON.stringify(operation.error)}`,
           };
-
-          return null;
         }
 
+        if (attempt < this.MAX_POLL_ATTEMPTS) {
+          await this.delay(this.POLL_DELAY_MS);
+        }
+      } catch (error: any) {
         return {
-          ...item,
-          teamId: operation.targetResourceId,
-        };
-      }
-
-      if (operation.status === 'failed') {
-        results[item.index] = {
           ...this.createBaseResult(item.group, item.index, item.departments),
           status: 'failed',
           operationUrl: item.operationUrl,
-          error: `Team provisioning failed: ${JSON.stringify(operation.error)}`,
+          error: this.getErrorMessage(error),
         };
-
-        return null;
       }
-
-      return item;
-    } catch (error: any) {
-      results[item.index] = {
-        ...this.createBaseResult(item.group, item.index, item.departments),
-        status: 'failed',
-        operationUrl: item.operationUrl,
-        error: this.getErrorMessage(error),
-      };
-
-      return null;
     }
-  }
 
-  private async fillCreatedTeams(
-    items: StartedTeamItem[],
-    results: TeamImportGroupResult[],
-  ): Promise<void> {
-    await this.runWithConcurrency(
-      items,
-      this.TEAM_FILL_CONCURRENCY,
-      async (item) => {
-        if (!item.teamId) {
-          return;
-        }
-
-        results[item.index] = await this.fillCreatedTeam(item);
-      },
-    );
+    return {
+      ...this.createBaseResult(item.group, item.index, item.departments),
+      status: 'timed_out',
+      operationUrl: item.operationUrl,
+      error: 'Team creation polling timed out',
+    };
   }
 
   private async fillCreatedTeam(
@@ -274,11 +293,14 @@ export class MicrosoftTeamsImportService {
     }
 
     try {
-      const addMembersResult =
-        await this.microsoftGraphClient.addDepartmentMembersToTeam(
-          item.departments,
-          item.teamId,
-        );
+      const users = await this.microsoftGraphClient.getMembersByDepartment(
+        item.departments,
+      );
+
+      const addMembersResult = await this.microsoftGraphClient.addUsersToTeam(
+        users,
+        item.teamId,
+      );
 
       const hasMemberErrors = addMembersResult.totalFailed > 0;
 
@@ -392,28 +414,6 @@ export class MicrosoftTeamsImportService {
 
       results: completedResults,
     };
-  }
-
-  private async runWithConcurrency<T, R>(
-    items: T[],
-    concurrency: number,
-    handler: (item: T, index: number) => Promise<R>,
-  ): Promise<R[]> {
-    const results = new Array<R>(items.length);
-    let currentIndex = 0;
-
-    const workersCount = Math.min(concurrency, items.length);
-
-    const workers = Array.from({ length: workersCount }, async () => {
-      while (currentIndex < items.length) {
-        const index = currentIndex++;
-        results[index] = await handler(items[index], index);
-      }
-    });
-
-    await Promise.all(workers);
-
-    return results;
   }
 
   private normalizeDepartments(departments: string[]): string[] {
