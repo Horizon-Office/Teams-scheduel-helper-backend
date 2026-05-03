@@ -14,6 +14,63 @@ interface GraphAddTeamMemberResult {
   };
 }
 
+export type GraphEventPayload = {
+  subject: string;
+  body: {
+    contentType: "text" | "html";
+    content: string;
+  };
+  start: {
+    dateTime: string;
+    timeZone: string;
+  };
+  end: {
+    dateTime: string;
+    timeZone: string;
+  };
+  attendees: Array<{
+    emailAddress: {
+      address: string;
+      name?: string;
+    };
+    type: "required" | "optional" | "resource";
+  }>;
+  recurrence?: {
+    pattern: {
+      type: "daily" | "weekly" | "absoluteMonthly" | "relativeMonthly" | "absoluteYearly" | "relativeYearly";
+      interval: number;
+      daysOfWeek?: string[];
+      firstDayOfWeek?: string;
+    };
+    range: {
+      type: "endDate" | "noEnd" | "numbered";
+      startDate: string;
+      endDate?: string;
+      numberOfOccurrences?: number;
+      recurrenceTimeZone?: string;
+    };
+  };
+  isOnlineMeeting?: boolean;
+  onlineMeetingProvider?: "teamsForBusiness";
+  responseRequested?: boolean;
+  allowNewTimeProposals?: boolean;
+  hideAttendees?: boolean;
+  isReminderOn?: boolean;
+  reminderMinutesBeforeStart?: number;
+  transactionId?: string;
+};
+
+export type CreatedGraphEvent = {
+  id: string;
+  subject: string;
+  webLink?: string;
+  onlineMeeting?: {
+    joinUrl?: string;
+  };
+};
+
+
+
 export interface StartTeamCreationResult {
   teamName: string;
   status: 'accepted' | 'created';
@@ -231,6 +288,59 @@ export class MicrosoftGraphSecurityClientService {
 
       throw error;
     }
+  }
+
+
+  async createTeacherCalendarEvent(
+    teacherId: string,
+    eventPayload: GraphEventPayload,
+  ): Promise<CreatedGraphEvent> {
+    if (!teacherId) {
+      throw new Error('teacherId is required');
+    }
+
+    if (!eventPayload.attendees?.length) {
+      throw new Error('At least one attendee is required');
+    }
+
+    const accessToken = await this.getAppToken();
+
+    const graphUrl = `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(
+      teacherId,
+    )}/calendar/events`;
+
+    const response = await fetch(graphUrl, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+        Prefer: 'outlook.timezone="Europe/Kyiv"',
+      },
+      body: JSON.stringify(eventPayload),
+    });
+
+    const responseBody = await response.json().catch(() => null);
+
+    if (!response.ok) {
+      throw new Error(
+        `Microsoft Graph create event failed: ${response.status} ${
+          response.statusText
+        } ${JSON.stringify(responseBody)}`,
+      );
+    }
+
+    if (!responseBody?.id) {
+      throw new Error('Microsoft Graph create event failed: empty event id');
+    }
+
+    return {
+      id: responseBody.id,
+      subject: responseBody.subject,
+      webLink: responseBody.webLink,
+      onlineMeeting: {
+        joinUrl: responseBody.onlineMeeting?.joinUrl,
+      },
+    };
   }
 
   /**
