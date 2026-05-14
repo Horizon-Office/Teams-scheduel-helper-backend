@@ -11,7 +11,7 @@ export class MicrosoftEventsImportController {
     private readonly microsoftEventsImportService: MicrosoftEventsImportService,
   ) {}
 
-  @Post('import')
+  @Post('create-events')
   @HttpCode(HttpStatus.OK)
   async importEvents(
     @Body() dto: ImportEventsDto,

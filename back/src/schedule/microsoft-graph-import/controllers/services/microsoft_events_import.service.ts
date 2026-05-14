@@ -19,9 +19,7 @@ export class MicrosoftEventsImportService {
     private readonly microsoftGraphSecurityClientService: MicrosoftGraphSecurityClientService,
   ) {}
 
-  async importEvents(
-    events: CreateEventDto[],
-  ): Promise<EventsImportResponseDto> {
+  async importEvents(events: CreateEventDto[]): Promise<EventsImportResponseDto> {
     const results: (EventImportSuccessResultDto | EventImportErrorResultDto)[] = [];
 
     for (const [index, eventToCreate] of events.entries()) {
@@ -40,16 +38,15 @@ export class MicrosoftEventsImportService {
 
         results.push({
           index,
-          success: true,
+          success:   true,
           teacherId,
-          eventId: createdEvent.id,
-          joinUrl: createdEvent.onlineMeeting?.joinUrl,
-          webLink: createdEvent.webLink,
-          subject: createdEvent.subject,
+          eventId:   createdEvent.id,
+          joinUrl:   createdEvent.onlineMeeting?.joinUrl,
+          webLink:   createdEvent.webLink,
+          subject:   createdEvent.subject,
         });
       } catch (error) {
-        const message =
-          error instanceof Error ? error.message : JSON.stringify(error);
+        const message = error instanceof Error ? error.message : JSON.stringify(error);
 
         this.logger.error(
           `Failed to import Microsoft event at index ${index}: ${message}`,
@@ -57,20 +54,20 @@ export class MicrosoftEventsImportService {
 
         results.push({
           index,
-          success: false,
+          success:   false,
           teacherId,
-          error: message,
-          subject: eventToCreate.subject,
+          error:     message,
+          subject:   eventToCreate.subject,
         });
       }
     }
 
     const created = results.filter((r) => r.success).length;
-    const failed = results.length - created;
+    const failed  = results.length - created;
 
     return {
       success: failed === 0,
-      total: events.length,
+      total:   events.length,
       created,
       failed,
       results,

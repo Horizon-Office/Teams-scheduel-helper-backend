@@ -6,7 +6,7 @@ import {
   IsOptional,
   ValidateNested,
   ArrayMinSize,
-  IsDateString,
+  IsInt,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -15,6 +15,8 @@ class EventDateTimeDto {
   @IsNotEmpty()
   dateTime!: string;
 
+  // Microsoft Graph использует Windows Time Zone IDs,
+  // например: "FLE Standard Time"
   @IsString()
   @IsNotEmpty()
   timeZone!: string;
@@ -23,13 +25,12 @@ class EventDateTimeDto {
 class EventBodyDto {
   @IsString()
   @IsNotEmpty()
-  contentType!: string; // 'HTML' | 'text'
+  contentType!: string; // "text" | "html"
 
   @IsString()
   @IsNotEmpty()
   content!: string;
 }
-
 
 class EventAttendeeEmailDto {
   @IsString()
@@ -45,9 +46,62 @@ class EventAttendeeDto {
   @ValidateNested()
   @Type(() => EventAttendeeEmailDto)
   emailAddress!: EventAttendeeEmailDto;
+
+  // required | optional | resource
+  @IsString()
+  @IsOptional()
+  type?: 'required' | 'optional' | 'resource';
+}
+
+class RecurrencePatternDto {
+  @IsString()
+  @IsNotEmpty()
+  type!: string; // daily | weekly | absoluteMonthly | ...
+
+  // Каждые N единиц (например 1 = каждую неделю)
+  @IsInt()
+  interval!: number;
+
+  // Для weekly
+  @IsArray()
+  @IsString({ each: true })
+  @IsOptional()
+  daysOfWeek?: string[];
+}
+
+class RecurrenceRangeDto {
+  @IsString()
+  @IsNotEmpty()
+  type!: string; // noEnd | endDate | numbered
+
+  // Формат YYYY-MM-DD
+  @IsString()
+  @IsNotEmpty()
+  startDate!: string;
+
+  // Для endDate
+  @IsString()
+  @IsOptional()
+  endDate?: string;
+
+  // Для numbered
+  @IsInt()
+  @IsOptional()
+  numberOfOccurrences?: number;
+}
+
+class RecurrenceDto {
+  @ValidateNested()
+  @Type(() => RecurrencePatternDto)
+  pattern!: RecurrencePatternDto;
+
+  @ValidateNested()
+  @Type(() => RecurrenceRangeDto)
+  range!: RecurrenceRangeDto;
 }
 
 export class CreateEventDto {
+  // UPN или userId преподавателя
   @IsString()
   @IsNotEmpty()
   teacherId!: string;
@@ -58,7 +112,7 @@ export class CreateEventDto {
 
   @ValidateNested()
   @Type(() => EventBodyDto)
-  body!: EventBodyDto;          // ← добавить
+  body!: EventBodyDto;
 
   @ValidateNested()
   @Type(() => EventDateTimeDto)
@@ -73,6 +127,29 @@ export class CreateEventDto {
   @Type(() => EventAttendeeDto)
   @IsOptional()
   attendees?: EventAttendeeDto[];
+
+  // Позволяет указать:
+  // - weekly
+  // - interval: 1 (каждую неделю)
+  // - daysOfWeek: ["monday"]
+  @ValidateNested()
+  @Type(() => RecurrenceDto)
+  @IsOptional()
+  recurrence?: RecurrenceDto;
+
+  // Создать Teams meeting
+  @IsBoolean()
+  @IsOptional()
+  isOnlineMeeting?: boolean;
+
+  // teamsForBusiness
+  @IsString()
+  @IsOptional()
+  onlineMeetingProvider?: 'teamsForBusiness';
+
+  @IsInt()
+  @IsOptional()
+  reminderMinutesBeforeStart?: number;
 }
 
 export class ImportEventsDto {
@@ -106,5 +183,8 @@ export class EventsImportResponseDto {
   total!: number;
   created!: number;
   failed!: number;
-  results!: (EventImportSuccessResultDto | EventImportErrorResultDto)[];
+  results!: (
+    | EventImportSuccessResultDto
+    | EventImportErrorResultDto
+  )[];
 }

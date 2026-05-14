@@ -299,10 +299,6 @@ export class MicrosoftGraphSecurityClientService {
       throw new Error('teacherId is required');
     }
 
-    if (!eventPayload.attendees?.length) {
-      throw new Error('At least one attendee is required');
-    }
-
     const accessToken = await this.getAppToken();
 
     const graphUrl = `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(
@@ -334,9 +330,9 @@ export class MicrosoftGraphSecurityClientService {
     }
 
     return {
-      id: responseBody.id,
-      subject: responseBody.subject,
-      webLink: responseBody.webLink,
+      id:            responseBody.id,
+      subject:       responseBody.subject,
+      webLink:       responseBody.webLink,
       onlineMeeting: {
         joinUrl: responseBody.onlineMeeting?.joinUrl,
       },
