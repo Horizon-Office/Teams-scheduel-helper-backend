@@ -4,40 +4,12 @@ import {
   GraphEventPayload,
   MicrosoftGraphSecurityClientService,
 } from 'src/client/microsoft_graph/microsoft_graph_security.service';
-
-export type MicrosoftGraphEventCreatePayload = GraphEventPayload & {
-  teacherId: string;
-};
-
-export type MicrosoftEventImportSuccessResult = {
-  index: number;
-  success: true;
-  teacherId: string;
-  eventId: string;
-  joinUrl?: string;
-  webLink?: string;
-  subject: string;
-};
-
-export type MicrosoftEventImportErrorResult = {
-  index: number;
-  success: false;
-  teacherId?: string;
-  error: string;
-  subject?: string;
-};
-
-export type MicrosoftEventImportResult =
-  | MicrosoftEventImportSuccessResult
-  | MicrosoftEventImportErrorResult;
-
-export type MicrosoftEventsImportResponse = {
-  success: boolean;
-  total: number;
-  created: number;
-  failed: number;
-  results: MicrosoftEventImportResult[];
-};
+import {
+  CreateEventDto,
+  EventImportErrorResultDto,
+  EventImportSuccessResultDto,
+  EventsImportResponseDto,
+} from './dto/create_event.dto/create_event.dto';
 
 @Injectable()
 export class MicrosoftEventsImportService {
@@ -48,9 +20,9 @@ export class MicrosoftEventsImportService {
   ) {}
 
   async importEvents(
-    events: MicrosoftGraphEventCreatePayload[],
-  ): Promise<MicrosoftEventsImportResponse> {
-    const results: MicrosoftEventImportResult[] = [];
+    events: CreateEventDto[],
+  ): Promise<EventsImportResponseDto> {
+    const results: (EventImportSuccessResultDto | EventImportErrorResultDto)[] = [];
 
     for (const [index, eventToCreate] of events.entries()) {
       const { teacherId, ...eventPayload } = eventToCreate;
@@ -63,7 +35,7 @@ export class MicrosoftEventsImportService {
         const createdEvent: CreatedGraphEvent =
           await this.microsoftGraphSecurityClientService.createTeacherCalendarEvent(
             teacherId,
-            eventPayload,
+            eventPayload as GraphEventPayload,
           );
 
         results.push({
@@ -93,7 +65,7 @@ export class MicrosoftEventsImportService {
       }
     }
 
-    const created = results.filter((result) => result.success).length;
+    const created = results.filter((r) => r.success).length;
     const failed = results.length - created;
 
     return {

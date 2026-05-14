@@ -1,30 +1,21 @@
-import { BadRequestException, Body, Controller, Post } from '@nestjs/common';
+import { Body, Controller, HttpCode, HttpStatus, Post } from '@nestjs/common';
+import { MicrosoftEventsImportService } from './services/microsoft_events_import.service';
 import {
-  MicrosoftEventsImportResponse,
-  MicrosoftEventsImportService,
-  MicrosoftGraphEventCreatePayload,
-} from './services/microsoft_events_import.service';
+  ImportEventsDto,
+  EventsImportResponseDto,
+} from './services/dto/create_event.dto/create_event.dto';
 
-export type CreateMicrosoftEventsBody = {
-  events: MicrosoftGraphEventCreatePayload[];
-};
-
-@Controller('microsoft-graph-events-import')
+@Controller('microsoft/events')
 export class MicrosoftEventsImportController {
   constructor(
     private readonly microsoftEventsImportService: MicrosoftEventsImportService,
   ) {}
 
-  @Post('create-events')
-  async createEvents(
-    @Body() body: CreateMicrosoftEventsBody,
-  ): Promise<MicrosoftEventsImportResponse> {
-    const { events } = body;
-
-    if (!Array.isArray(events) || events.length === 0) {
-      throw new BadRequestException('events must be a non-empty array');
-    }
-
-    return this.microsoftEventsImportService.importEvents(events);
+  @Post('import')
+  @HttpCode(HttpStatus.OK)
+  async importEvents(
+    @Body() dto: ImportEventsDto,
+  ): Promise<EventsImportResponseDto> {
+    return this.microsoftEventsImportService.importEvents(dto.events);
   }
 }

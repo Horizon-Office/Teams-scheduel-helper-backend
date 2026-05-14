@@ -1,88 +1,110 @@
-import { 
-  IsString, IsBoolean, IsArray, IsNumber, IsOptional,
-  IsObject, ValidateNested, IsEnum, IsNotEmpty
+import {
+  IsString,
+  IsNotEmpty,
+  IsArray,
+  IsBoolean,
+  IsOptional,
+  ValidateNested,
+  ArrayMinSize,
+  IsDateString,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
-class EmailAddressDto {
+class EventDateTimeDto {
   @IsString()
   @IsNotEmpty()
-  address: string;
+  dateTime!: string;
 
   @IsString()
   @IsNotEmpty()
-  name: string;
+  timeZone!: string;
+}
+
+class EventBodyDto {
+  @IsString()
+  @IsNotEmpty()
+  contentType!: string; // 'HTML' | 'text'
+
+  @IsString()
+  @IsNotEmpty()
+  content!: string;
 }
 
 
-class AttendeeDto {
-  @IsObject()
-  @ValidateNested()
-  @Type(() => EmailAddressDto)
-  emailAddress: EmailAddressDto;
+class EventAttendeeEmailDto {
+  @IsString()
+  @IsNotEmpty()
+  address!: string;
 
-  @IsEnum(['required', 'optional'])
-  type: 'required' | 'optional';
+  @IsString()
+  @IsOptional()
+  name?: string;
+}
+
+class EventAttendeeDto {
+  @ValidateNested()
+  @Type(() => EventAttendeeEmailDto)
+  emailAddress!: EventAttendeeEmailDto;
 }
 
 export class CreateEventDto {
   @IsString()
   @IsNotEmpty()
-  teacherId: string;
+  teacherId!: string;
 
   @IsString()
   @IsNotEmpty()
-  subject: string;
-  
-  @IsString()
-  @IsNotEmpty()
-  department: string;
+  subject!: string;
 
-  @IsOptional()
-  @IsObject()
-  body?: {
-    contentType: 'html' | 'text';
-    content: string;
-  };
+  @ValidateNested()
+  @Type(() => EventBodyDto)
+  body!: EventBodyDto;          // ← добавить
 
-  @IsObject()
-  start: {
-    dateTime: string;
-    timeZone: string;
-  };
+  @ValidateNested()
+  @Type(() => EventDateTimeDto)
+  start!: EventDateTimeDto;
 
-  @IsObject()
-  end: {
-    dateTime: string;
-    timeZone: string;
-  };
+  @ValidateNested()
+  @Type(() => EventDateTimeDto)
+  end!: EventDateTimeDto;
 
   @IsArray()
   @ValidateNested({ each: true })
-  @Type(() => AttendeeDto)
-  attendees: AttendeeDto[];
-
+  @Type(() => EventAttendeeDto)
   @IsOptional()
-  @IsBoolean()
-  isOnlineMeeting?: boolean;
+  attendees?: EventAttendeeDto[];
+}
 
-  @IsOptional()
-  @IsObject()
-  recurrence?: {
-    pattern: {
-      type: string;
-      interval: number;
-      daysOfWeek: string[];
-    };
-    range: {
-      type: 'endDate' | 'noEnd' | 'numbered';
-      startDate?: string;
-      endDate?: string;
-      numberOfOccurrences?: number;
-    };
-  };
+export class ImportEventsDto {
+  @IsArray()
+  @ArrayMinSize(1)
+  @ValidateNested({ each: true })
+  @Type(() => CreateEventDto)
+  events!: CreateEventDto[];
+}
 
-  @IsOptional()
-  @IsNumber()
-  reminderMinutesBeforeStart?: number;
+export class EventImportSuccessResultDto {
+  index!: number;
+  success!: true;
+  teacherId!: string;
+  eventId!: string;
+  joinUrl?: string;
+  webLink?: string;
+  subject!: string;
+}
+
+export class EventImportErrorResultDto {
+  index!: number;
+  success!: false;
+  teacherId?: string;
+  error!: string;
+  subject?: string;
+}
+
+export class EventsImportResponseDto {
+  success!: boolean;
+  total!: number;
+  created!: number;
+  failed!: number;
+  results!: (EventImportSuccessResultDto | EventImportErrorResultDto)[];
 }

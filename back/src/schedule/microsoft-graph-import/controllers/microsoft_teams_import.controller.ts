@@ -1,33 +1,17 @@
 import { Body, Controller, Post } from '@nestjs/common';
 import { MicrosoftTeamsImportService } from './services/microsoft_teams_import.service';
-
-export type Group = {
-    displayName: string,
-    departments: string[],
-    description: string,
-    owner: {
-        name: string;
-        id: string;
-    };
-}
+import { CreateTeamsDto } from './services/dto/create_teams.dto/create_teams.dto'; // Импортируем твой новый DTO
 
 @Controller('microsoft-graph-teams-import')
 export class MicrosoftTeamsImportController {
-    constructor(
-        private readonly teamsImportService: MicrosoftTeamsImportService,
-    ) { }
+  constructor(
+    private readonly teamsImportService: MicrosoftTeamsImportService,
+  ) {}
 
-    @Post('create-teams')
-    async createTeams(
-        @Body('groups') groups: Group[],
-    ): Promise<any> {
-        if (!groups) {
-            return {
-                success: false,
-                message: 'At least one of "teams" or "departments" is required',
-            };
-        }
-
-        return this.teamsImportService.createTeams(groups || []);
-    }
-}   
+  @Post('create-teams')
+  async createTeams(
+    @Body() createTeamsDto: CreateTeamsDto, 
+  ): Promise<any> {
+    return this.teamsImportService.createTeams(createTeamsDto.groups);
+  }
+}

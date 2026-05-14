@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { MicrosoftGraphSecurityClientService } from 'src/client/microsoft_graph/microsoft_graph_security.service';
-import { Group } from '../microsoft_teams_import.controller';
+import { GroupDto } from './dto/create_teams.dto/create_teams.dto';
 
 type TeamsImportGroupStatus =
   | 'succeeded'
@@ -48,7 +48,7 @@ interface TeamsImportResult {
 
 interface StartedTeamItem {
   index: number;
-  group: Group;
+  group: GroupDto;
   departments: string[];
   operationUrl?: string;
   teamId?: string;
@@ -56,7 +56,7 @@ interface StartedTeamItem {
 
 interface StartBatchItem {
   index: number;
-  group: Group;
+  group: GroupDto;
 }
 
 @Injectable()
@@ -84,7 +84,7 @@ export class MicrosoftTeamsImportService {
    * @param groups Groups with team name, description, owner and departments
    * @returns Import result for all processed groups
    */
-  async createTeams(groups: Group[]): Promise<TeamsImportResult> {
+  async createTeams(groups: GroupDto[]): Promise<TeamsImportResult> {
     const results = new Array<TeamImportGroupResult>(groups.length);
 
     if (!groups.length) {
@@ -103,7 +103,7 @@ export class MicrosoftTeamsImportService {
   }
 
   private createStartBatches(
-    groups: Group[],
+    groups: GroupDto[],
     batchSize: number,
   ): StartBatchItem[][] {
     const batches: StartBatchItem[][] = [];
@@ -158,7 +158,7 @@ export class MicrosoftTeamsImportService {
   }
 
   private async processTeamLifecycle(
-    group: Group,
+    group: GroupDto,
     index: number,
     results: TeamImportGroupResult[],
   ): Promise<void> {
@@ -329,7 +329,7 @@ export class MicrosoftTeamsImportService {
   }
 
   private createBaseResult(
-    group: Group,
+    group: GroupDto,
     index: number,
     departments: string[],
   ): TeamImportGroupResult {
@@ -351,7 +351,7 @@ export class MicrosoftTeamsImportService {
   }
 
   private createFailedResult(
-    group: Group,
+    group: GroupDto,
     index: number,
     departments: string[],
     error: string,
